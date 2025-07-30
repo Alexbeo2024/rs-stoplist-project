@@ -86,7 +86,7 @@
 **Шаги выполнения:**
 - [x] Реализовать `FileProcessingService`
 - [x] Реализовать `EmailReaderService`
-- [ ] Реализовать `SftpUploadService`
+- [x] Реализовать `SftpUploadService`
 - [ ] Реализовать отправку уведомлений
 
 **Зависимости:** Сборка: Dependency Injection и планировщик

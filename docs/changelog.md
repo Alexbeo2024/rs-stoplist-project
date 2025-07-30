@@ -60,3 +60,8 @@
 
 ### ✅ Изменено
 - В `src/infrastructure/email/email_reader.py` реализована логика подключения к IMAP, поиска новых писем, проверки на дубликаты и извлечения `.xlsx` вложений.
+
+## [2024-07-30] - Реализация сервиса загрузки SFTP
+
+### ✅ Изменено
+- В `src/infrastructure/sftp/sftp_uploader.py` реализована логика загрузки файлов по SFTP с использованием `asyncssh`, включая 3 попытки с exponential backoff.

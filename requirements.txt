@@ -26,7 +26,7 @@ PyYAML
 # 5. Email & SFTP
 # =====================================
 # aiosmtplib # Для асинхронной отправки email
-# asyncssh # Для асинхронной работы с SFTP
+asyncssh # Для асинхронной работы с SFTP
 imap-tools # Для удобной работы с IMAP
 pandas # Для конвертации xlsx в csv
 openpyxl # Движок для pandas для работы с xlsx
