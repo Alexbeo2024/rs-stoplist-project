@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from fastapi import FastAPI, Response, status
 
 from src.application.container import Container
@@ -47,13 +48,69 @@ async def live_check():
     """Проверка живости сервиса (простая проверка)."""
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.get("/health/ready", status_code=status.HTTP_204_NO_CONTENT, tags=["Health Check"])
+@app.get("/health/ready", tags=["Health Check"])
 async def ready_check():
     """Проверка готовности сервиса (проверка зависимостей)."""
     logger = get_logger(__name__)
     logger.debug("Health ready check requested")
-    # TODO: Добавить проверку зависимостей (БД, SFTP и т.д.)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    try:
+        health_service = await container.health_check_service()
+        health_result = await health_service.check_overall_health()
+
+        if health_result["status"] == "healthy":
+            logger.debug("All dependencies are healthy")
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        else:
+            logger.warning(f"Health check failed: {health_result}")
+            return Response(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=f"Service dependencies are unhealthy: {health_result.get('error', 'Unknown error')}",
+                media_type="text/plain"
+            )
+    except Exception as e:
+        logger.error(f"Health check error: {e}", exc_info=True)
+        return Response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=f"Health check failed: {str(e)}",
+            media_type="text/plain"
+                 )
+
+@app.get("/health/detailed", tags=["Health Check"])
+async def detailed_health_check():
+    """Детальная проверка состояния всех зависимостей с подробной информацией."""
+    logger = get_logger(__name__)
+    logger.debug("Detailed health check requested")
+
+    try:
+        health_service = await container.health_check_service()
+        health_result = await health_service.check_overall_health()
+
+        # Возвращаем полную информацию независимо от статуса
+        if health_result["status"] == "healthy":
+            return Response(
+                status_code=status.HTTP_200_OK,
+                content=health_result,
+                media_type="application/json"
+            )
+        else:
+            return Response(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content=health_result,
+                media_type="application/json"
+            )
+    except Exception as e:
+        logger.error(f"Detailed health check error: {e}", exc_info=True)
+        error_result = {
+            "status": "unhealthy",
+            "error": str(e),
+            "checked_at": datetime.utcnow().isoformat()
+        }
+        return Response(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=error_result,
+            media_type="application/json"
+        )
 
 @app.get("/metrics", tags=["Monitoring"])
 async def metrics():

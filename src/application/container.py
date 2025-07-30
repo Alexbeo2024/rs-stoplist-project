@@ -16,6 +16,7 @@ from src.infrastructure.sftp.sftp_uploader import SftpUploadService
 from src.infrastructure.storage.repositories import ProcessedFileRepository, OperationLogRepository
 from src.infrastructure.storage.file_processor import FileProcessingService
 from src.application.handlers.main_handler import MainHandler
+from src.application.api.health_checks import HealthCheckService
 
 # =====================================
 # 2. Определение DI контейнера
@@ -102,4 +103,11 @@ class Container(containers.DeclarativeContainer):
         file_repo=processed_file_repo,
         log_repo=operation_log_repo,
         notification_service=notification_service,
+    )
+
+    # --- Health Checks ---
+    health_check_service: providers.Factory[HealthCheckService] = providers.Factory(
+        HealthCheckService,
+        config=config,
+        session_factory=db_session_factory,
     )
