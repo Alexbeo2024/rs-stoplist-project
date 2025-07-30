@@ -19,3 +19,10 @@
 - Создан файл `requirements.txt` с основными зависимостями.
 - Создано базовое FastAPI-приложение `src/application/api/main.py` с health-check эндпоинтами.
 - Реализован модуль `src/config/__init__.py` для загрузки и валидации конфигурации.
+
+## [2024-07-30] - Инфраструктурный слой: База данных и Репозитории
+
+### ✅ Добавлено
+- Настроен модуль `src/infrastructure/storage/database.py` для асинхронной работы с БД.
+- В `src/domain/repositories/__init__.py` определены абстрактные интерфейсы репозиториев.
+- В `src/infrastructure/storage/repositories.py` реализованы конкретные репозитории на SQLAlchemy.
