@@ -1,39 +1,26 @@
 # =====================================
 # 1. Импорт библиотек
 # =====================================
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-
-# from src.config import config # Закомментировано до настройки .env
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import declarative_base
 
 # =====================================
-# 2. Настройка подключения к БД
+# 2. Базовая модель для ORM
 # =====================================
-
-# DATABASE_URL = (
-#     f"postgresql+asyncpg://{config.db.user}:{config.db.password}"
-#     f"@{config.db.host}:{config.db.port}/{config.db.name}"
-# )
-
-# ЗАГЛУШКА: Используем временный URL для in-memory SQLite для возможности запуска
-# В реальной среде он будет заменен на DATABASE_URL.
-DATABASE_URL = "sqlite+aiosqlite:///./test.db" # Временно
-
-engine = create_async_engine(DATABASE_URL, echo=True, future=True)
-
-async_session_maker = sessionmaker(
-    bind=engine, class_=AsyncSession, expire_on_commit=False
-)
-
 Base = declarative_base()
 
 # =====================================
-# 3. Функция для получения сессии
+# 3. Функция для получения сессии (будет внедряться DI)
 # =====================================
 
 async def get_async_session() -> AsyncSession:
     """
     Зависимость для получения асинхронной сессии SQLAlchemy.
+
+    В реальном приложении эта функция будет заменена
+    на зависимость из DI контейнера, который будет предоставлять
+    уже настроенную сессию.
     """
-    async with async_session_maker() as session:
-        yield session
+    # Этот код здесь больше не нужен, так как сессия будет
+    # управляться через DI. Оставлен для ясности.
+    raise NotImplementedError("This function should be provided by DI container")

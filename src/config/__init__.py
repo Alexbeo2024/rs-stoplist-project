@@ -19,6 +19,13 @@ class EmailConfig(BaseSettings):
     password: str
     allowed_senders: List[str]
 
+class DatabaseConfig(BaseSettings):
+    host: str
+    port: int
+    user: str
+    password: str
+    name: str
+
 class SftpConfig(BaseSettings):
     host: str
     username: str
@@ -42,6 +49,7 @@ class SchedulerConfig(BaseSettings):
 
 class AppConfig(BaseSettings):
     email: EmailConfig
+    database: DatabaseConfig
     sftp: SftpConfig
     notifications: NotificationsConfig
     scheduler: SchedulerConfig

@@ -36,8 +36,14 @@ class Container(containers.DeclarativeContainer):
     # -------------------
     db_engine = providers.Singleton(
         create_async_engine,
-        # url=config.db_url # Заменить, когда будет реальный URL
-        url="sqlite+aiosqlite:///./test.db"
+        url=providers.Callable(
+            lambda user, password, host, port, name: f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{name}",
+            user=config.database.user,
+            password=config.database.password,
+            host=config.database.host,
+            port=config.database.port,
+            name=config.database.name,
+        )
     )
 
     db_session_factory = providers.Singleton(
