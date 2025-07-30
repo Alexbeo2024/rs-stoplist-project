@@ -47,12 +47,18 @@ class NotificationsConfig(BaseSettings):
 class SchedulerConfig(BaseSettings):
     interval_hours: int
 
+class LoggingConfig(BaseSettings):
+    config_file: str
+    log_to_file: bool
+    log_level: str
+
 class AppConfig(BaseSettings):
     email: EmailConfig
     database: DatabaseConfig
     sftp: SftpConfig
     notifications: NotificationsConfig
     scheduler: SchedulerConfig
+    logging: LoggingConfig
 
 # =====================================
 # 3. Функция загрузки конфигурации

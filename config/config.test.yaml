@@ -32,3 +32,11 @@ notifications:
 
 scheduler:
   interval_hours: 1
+
+# =====================================
+# 6. Логгирование
+# =====================================
+logging:
+  config_file: "config/logging.yaml"
+  log_to_file: false # В тестах логи только в консоль
+  log_level: "DEBUG" # Более детальные логи для отладки

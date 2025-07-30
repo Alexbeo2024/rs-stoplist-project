@@ -7,15 +7,20 @@ from src.domain.repositories import IProcessedFileRepository, IOperationLogRepos
 from src.domain.services import IEmailReaderService, IFileProcessingService, ISftpUploadService
 from src.domain.models import ProcessedFile, OperationLog
 from src.domain.services.notifications import INotificationService, AlertMessage
+from src.infrastructure.logging.logger import get_logger
 
 # =====================================
-# 2. Реализация главного обработчика
+# 2. Главный обработчик
 # =====================================
 
 class MainHandler:
     """
-    Оркестратор, который управляет всем процессом обработки.
+    Основной обработчик, координирующий всю цепочку обработки email.
+
+    Объединяет работу сервисов email, обработки файлов, SFTP и уведомлений
+    для реализации полного бизнес-процесса.
     """
+
     def __init__(
         self,
         email_service: IEmailReaderService,
@@ -31,56 +36,138 @@ class MainHandler:
         self.file_repo = file_repo
         self.log_repo = log_repo
         self.notification_service = notification_service
+        self.logger = get_logger(__name__)
+        self.logger.info("MainHandler initialized with all required services")
 
-    async def _send_alert(self, alert: AlertMessage):
-        """Отправляет уведомление по всем настроенным каналам."""
+    async def _send_alert(self, alert: AlertMessage) -> None:
+        """
+        Отправляет уведомление через все настроенные каналы.
+
+        Args:
+            alert: Сообщение для отправки
+        """
+        self.logger.debug(f"Sending alert: {alert.error_type}")
         for service in self.notification_service:
-            await service.send(alert)
-
-    async def process_emails(self):
-        """
-        Основной метод, запускающий полный цикл обработки:
-        1. Чтение новых писем.
-        2. Обработка и конвертация вложений.
-        3. Сохранение информации в БД.
-        4. Загрузка на SFTP.
-        5. Обновление статуса в БД.
-        """
-        async for email in self.email_service.fetch_new_emails():
             try:
-                # Обработка файлов
-                processed_files = await self.file_service.save_and_convert(email)
-
-                for file_meta in processed_files:
-                    # Сохранение в БД
-                    db_entry = ProcessedFile(**file_meta)
-                    created_file = await self.file_repo.add(db_entry)
-
-                    # Загрузка на SFTP
-                    upload_success = await self.sftp_service.upload_file(
-                        local_path=created_file.csv_path,
-                        remote_path=f"/upload/{created_file.file_name.replace('.xlsx', '.csv')}"
-                    )
-
-                    # Обновление статуса
-                    if upload_success:
-                        created_file.sftp_uploaded = True
-                        # await self.file_repo.update(created_file) # <-- нужен метод update
-                        print(f"File {created_file.csv_path} uploaded successfully.")
-
+                await service.send(alert)
             except Exception as e:
-                # Логирование ошибок
-                alert = AlertMessage(
-                    error_type=e.__class__.__name__,
-                    service_name="MainHandler",
-                    message=f"Failed to process email {email.message_id}: {e}",
-                    context={"message_id": email.message_id}
-                )
-                await self._send_alert(alert)
+                self.logger.error(f"Failed to send alert via {service.__class__.__name__}: {e}")
 
-                await self.log_repo.add(OperationLog(
-                    operation_type="EMAIL_PROCESSING",
-                    status="ERROR",
-                    message=f"Failed to process email {email.message_id}: {e}",
-                    context={"message_id": email.message_id}
-                ))
+    async def process_emails(self) -> None:
+        """
+        Основной метод обработки: получает email, обрабатывает файлы, загружает на SFTP.
+        """
+        self.logger.info("Starting email processing cycle")
+
+        processed_count = 0
+        error_count = 0
+
+        try:
+            async for email in self.email_service.fetch_new_emails():
+                try:
+                    self.logger.info(f"Processing email from {email.sender} with {len(email.attachments)} attachments")
+
+                    # Шаг 1: Обработка и сохранение файлов
+                    processed_files = await self.file_service.save_and_convert(email)
+
+                    if not processed_files:
+                        self.logger.warning(f"No files were processed from email {email.message_id}")
+                        continue
+
+                    # Шаг 2: Сохранение метаданных в БД и загрузка на SFTP
+                    for file_meta in processed_files:
+                        self.logger.debug(f"Processing file metadata: {file_meta['file_name']}")
+
+                        try:
+                            # Сохранение в БД
+                            db_entry = ProcessedFile(**file_meta)
+                            created_file = await self.file_repo.add(db_entry)
+                            self.logger.debug(f"File metadata saved to database with ID: {created_file.id}")
+
+                            # Загрузка на SFTP
+                            remote_filename = created_file.file_name.replace('.xlsx', '.csv')
+                            remote_path = f"/upload/{remote_filename}"
+
+                            self.logger.debug(f"Uploading {created_file.csv_path} to SFTP")
+                            upload_success = await self.sftp_service.upload_file(
+                                local_path=created_file.csv_path,
+                                remote_path=remote_path
+                            )
+
+                            if upload_success:
+                                # Обновляем статус загрузки в БД
+                                created_file.sftp_uploaded = True
+                                self.logger.info(f"File {created_file.file_name} successfully processed and uploaded")
+
+                                # Логгируем успешную операцию
+                                await self.log_repo.add(OperationLog(
+                                    operation_type="FILE_UPLOAD",
+                                    status="SUCCESS",
+                                    message=f"File {created_file.file_name} uploaded to SFTP",
+                                    context={"file_id": created_file.id, "remote_path": remote_path}
+                                ))
+                            else:
+                                self.logger.error(f"Failed to upload {created_file.file_name} to SFTP")
+
+                                # Отправляем уведомление о проблеме с SFTP
+                                alert = AlertMessage(
+                                    level="ERROR",
+                                    error_type="SftpUploadError",
+                                    service_name="MainHandler",
+                                    message=f"Failed to upload file {created_file.file_name} to SFTP after all retries",
+                                    context={"file_name": created_file.file_name, "email_id": email.message_id}
+                                )
+                                await self._send_alert(alert)
+
+                        except Exception as file_error:
+                            self.logger.error(f"Error processing file {file_meta['file_name']}: {file_error}", exc_info=True)
+                            error_count += 1
+
+                            # Логгируем ошибку обработки файла
+                            await self.log_repo.add(OperationLog(
+                                operation_type="FILE_PROCESSING",
+                                status="ERROR",
+                                message=f"Error processing file {file_meta['file_name']}: {file_error}",
+                                context={"file_name": file_meta['file_name'], "email_id": email.message_id}
+                            ))
+
+                    processed_count += 1
+                    self.logger.info(f"Email {email.message_id} processing completed successfully")
+
+                except Exception as email_error:
+                    self.logger.error(f"Error processing email {email.message_id}: {email_error}", exc_info=True)
+                    error_count += 1
+
+                    # Отправляем критическое уведомление
+                    alert = AlertMessage(
+                        level="CRITICAL",
+                        error_type=email_error.__class__.__name__,
+                        service_name="MainHandler",
+                        message=f"Failed to process email {email.message_id}: {email_error}",
+                        context={"message_id": email.message_id, "sender": email.sender}
+                    )
+                    await self._send_alert(alert)
+
+                    # Логгируем критическую ошибку
+                    await self.log_repo.add(OperationLog(
+                        operation_type="EMAIL_PROCESSING",
+                        status="ERROR",
+                        message=f"Failed to process email {email.message_id}: {email_error}",
+                        context={"message_id": email.message_id, "sender": email.sender}
+                    ))
+
+        except Exception as general_error:
+            self.logger.critical(f"Critical error in email processing cycle: {general_error}", exc_info=True)
+
+            # Отправляем критическое системное уведомление
+            alert = AlertMessage(
+                level="CRITICAL",
+                error_type=general_error.__class__.__name__,
+                service_name="MainHandler",
+                message=f"Email processing cycle failed: {general_error}",
+                context={"processed_count": processed_count, "error_count": error_count}
+            )
+            await self._send_alert(alert)
+
+        finally:
+            self.logger.info(f"Email processing cycle completed. Processed: {processed_count}, Errors: {error_count}")

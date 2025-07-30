@@ -92,3 +92,7 @@ venv.bak/
 # Secrets
 *.env
 config.yaml
+
+# Logs
+logs/
+*.log
