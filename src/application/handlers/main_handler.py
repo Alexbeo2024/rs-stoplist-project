@@ -84,38 +84,47 @@ class MainHandler:
                             created_file = await self.file_repo.add(db_entry)
                             self.logger.debug(f"File metadata saved to database with ID: {created_file.id}")
 
-                            # Загрузка на SFTP
+                            # Загрузка на SFTP с валидацией хеш-суммы
                             remote_filename = created_file.file_name.replace('.xlsx', '.csv')
                             remote_path = f"/upload/{remote_filename}"
 
-                            self.logger.debug(f"Uploading {created_file.csv_path} to SFTP")
-                            upload_success = await self.sftp_service.upload_file(
+                            self.logger.debug(f"Uploading {created_file.csv_path} to SFTP with hash validation")
+                            upload_success = await self.sftp_service.upload_file_with_validation(
                                 local_path=created_file.csv_path,
-                                remote_path=remote_path
+                                remote_path=remote_path,
+                                expected_hash=created_file.file_hash
                             )
 
                             if upload_success:
                                 # Обновляем статус загрузки в БД
                                 created_file.sftp_uploaded = True
-                                self.logger.info(f"File {created_file.file_name} successfully processed and uploaded")
+                                self.logger.info(f"File {created_file.file_name} successfully processed, uploaded and validated")
 
-                                # Логгируем успешную операцию
+                                # Логгируем успешную операцию с валидацией
                                 await self.log_repo.add(OperationLog(
-                                    operation_type="FILE_UPLOAD",
+                                    operation_type="FILE_UPLOAD_VALIDATED",
                                     status="SUCCESS",
-                                    message=f"File {created_file.file_name} uploaded to SFTP",
-                                    context={"file_id": created_file.id, "remote_path": remote_path}
+                                    message=f"File {created_file.file_name} uploaded to SFTP and hash validated",
+                                    context={
+                                        "file_id": created_file.id,
+                                        "remote_path": remote_path,
+                                        "file_hash": created_file.file_hash
+                                    }
                                 ))
                             else:
-                                self.logger.error(f"Failed to upload {created_file.file_name} to SFTP")
+                                self.logger.error(f"Failed to upload or validate {created_file.file_name} on SFTP")
 
-                                # Отправляем уведомление о проблеме с SFTP
+                                # Отправляем уведомление о проблеме с SFTP/валидацией
                                 alert = AlertMessage(
                                     level="ERROR",
-                                    error_type="SftpUploadError",
+                                    error_type="SftpUploadValidationError",
                                     service_name="MainHandler",
-                                    message=f"Failed to upload file {created_file.file_name} to SFTP after all retries",
-                                    context={"file_name": created_file.file_name, "email_id": email.message_id}
+                                    message=f"Failed to upload or validate file {created_file.file_name} on SFTP after all retries",
+                                    context={
+                                        "file_name": created_file.file_name,
+                                        "email_id": email.message_id,
+                                        "expected_hash": created_file.file_hash
+                                    }
                                 )
                                 await self._send_alert(alert)
 

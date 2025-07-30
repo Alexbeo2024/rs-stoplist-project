@@ -75,8 +75,12 @@ class TestFullFlow:
         csv_local_path = processed_meta[0]['csv_path']
         csv_filename = Path(csv_local_path).name
         remote_path = f"{sftp_config['remote_path']}/{csv_filename}"
+        expected_hash = processed_meta[0]['file_hash']
 
-        upload_success = await sftp_upload_service.upload_file(csv_local_path, remote_path)
+        # Тестируем новую функциональность валидации хеш-сумм
+        upload_success = await sftp_upload_service.upload_file_with_validation(
+            csv_local_path, remote_path, expected_hash
+        )
         assert upload_success is True
 
         # --- 3. Проверка: Файл на SFTP ---

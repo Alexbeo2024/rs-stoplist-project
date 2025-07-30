@@ -58,9 +58,9 @@ class FileProcessingService(IFileProcessingService):
                 f.write(attachment.content)
             self.logger.debug(f"Saved .xlsx file to: {xlsx_path}")
 
-            # Вычисление хеш-суммы
-            file_hash = hashlib.sha256(attachment.content).hexdigest()
-            self.logger.debug(f"Calculated SHA256 hash: {file_hash[:16]}...")
+            # Вычисление хеш-суммы исходного .xlsx файла
+            xlsx_hash = hashlib.sha256(attachment.content).hexdigest()
+            self.logger.debug(f"Calculated SHA256 hash for .xlsx: {xlsx_hash[:16]}...")
 
             # Конвертация в CSV
             csv_filename = f"RS_stoplist_{email.date.strftime('%Y%m%d')}.csv"
@@ -75,6 +75,11 @@ class FileProcessingService(IFileProcessingService):
                 # Логгирование статистики
                 self.logger.debug(f"CSV contains {len(df)} rows and {len(df.columns)} columns")
 
+                # Вычисление хеш-суммы CSV файла для валидации SFTP
+                with open(csv_path, "rb") as csv_file:
+                    csv_hash = hashlib.sha256(csv_file.read()).hexdigest()
+                self.logger.debug(f"Calculated SHA256 hash for CSV: {csv_hash[:16]}...")
+
             except Exception as e:
                 self.logger.error(f"Error converting file {attachment.filename} to CSV: {e}", exc_info=True)
                 continue
@@ -86,7 +91,7 @@ class FileProcessingService(IFileProcessingService):
                 "file_name": attachment.filename,
                 "file_path": xlsx_path,
                 "csv_path": csv_path,
-                "file_hash": file_hash,
+                "file_hash": csv_hash,  # Используем хеш CSV файла для валидации SFTP
                 "email_date": email.date,
             }
             processed_files_metadata.append(file_metadata)
