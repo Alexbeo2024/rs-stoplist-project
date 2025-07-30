@@ -6,6 +6,7 @@ from typing import Optional, List, Type
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import sessionmaker
 
 from src.domain.models import ProcessedFile as ProcessedFileModel, OperationLog as OperationLogModel
 from src.domain.repositories import IProcessedFileRepository, IOperationLogRepository
@@ -47,23 +48,26 @@ class OperationLog(Base):
 class SQLAlchemyRepository:
     model: Type[Base] = None
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self, session_factory: sessionmaker):
+        self.session_factory = session_factory
 
     async def add(self, data: dict) -> Base:
-        instance = self.model(**data)
-        self.session.add(instance)
-        await self.session.commit()
-        await self.session.refresh(instance)
-        return instance
+        async with self.session_factory() as session:
+            instance = self.model(**data)
+            session.add(instance)
+            await session.commit()
+            await session.refresh(instance)
+            return instance
 
     async def get(self, id: int) -> Optional[Base]:
-        return await self.session.get(self.model, id)
+        async with self.session_factory() as session:
+            return await session.get(self.model, id)
 
     async def list(self) -> List[Base]:
-        stmt = select(self.model)
-        result = await self.session.execute(stmt)
-        return result.scalars().all()
+        async with self.session_factory() as session:
+            stmt = select(self.model)
+            result = await session.execute(stmt)
+            return result.scalars().all()
 
 # =====================================
 # 4. Конкретные реализации репозиториев
@@ -73,24 +77,27 @@ class ProcessedFileRepository(SQLAlchemyRepository, IProcessedFileRepository):
     model = ProcessedFile
 
     async def add(self, file_data: ProcessedFileModel) -> ProcessedFileModel:
-        db_file = self.model(**file_data.dict())
-        self.session.add(db_file)
-        await self.session.commit()
-        await self.session.refresh(db_file)
-        return ProcessedFileModel.from_orm(db_file)
+        async with self.session_factory() as session:
+            db_file = self.model(**file_data.dict(exclude_unset=True))
+            session.add(db_file)
+            await session.commit()
+            await session.refresh(db_file)
+            return ProcessedFileModel.from_orm(db_file)
 
     async def find_by_message_id(self, message_id: str) -> Optional[ProcessedFileModel]:
-        stmt = select(self.model).where(self.model.message_id == message_id)
-        result = await self.session.execute(stmt)
-        instance = result.scalar_one_or_none()
-        return ProcessedFileModel.from_orm(instance) if instance else None
+        async with self.session_factory() as session:
+            stmt = select(self.model).where(self.model.message_id == message_id)
+            result = await session.execute(stmt)
+            instance = result.scalar_one_or_none()
+            return ProcessedFileModel.from_orm(instance) if instance else None
 
 class OperationLogRepository(SQLAlchemyRepository, IOperationLogRepository):
     model = OperationLog
 
     async def add(self, log_data: OperationLogModel) -> OperationLogModel:
-        db_log = self.model(**log_data.dict())
-        self.session.add(db_log)
-        await self.session.commit()
-        await self.session.refresh(db_log)
-        return OperationLogModel.from_orm(db_log)
+        async with self.session_factory() as session:
+            db_log = self.model(**log_data.dict(exclude_unset=True))
+            session.add(db_log)
+            await session.commit()
+            await session.refresh(db_log)
+            return OperationLogModel.from_orm(db_log)

@@ -5,7 +5,7 @@ from dependency_injector import containers, providers
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.config import config
+from src.config import get_config # Импортируем функцию, а не объект
 from src.domain.repositories import IProcessedFileRepository, IOperationLogRepository
 from src.domain.services import IEmailReaderService, IFileProcessingService, ISftpUploadService
 from src.domain.services.notifications import INotificationService
@@ -25,24 +25,19 @@ class Container(containers.DeclarativeContainer):
     """
     Главный DI контейнер приложения.
     """
-    # -------------------
-    # Конфигурация
-    # -------------------
-    config = providers.Configuration()
-    config.from_dict(config.to_dict())
+    # --- Конфигурация ---
+    config = providers.Singleton(get_config) # Создаем синглтон конфигурации
 
-    # -------------------
-    # Ядро: База данных
-    # -------------------
+    # --- Подключения ---
     db_engine = providers.Singleton(
         create_async_engine,
         url=providers.Callable(
             lambda user, password, host, port, name: f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{name}",
-            user=config.database.user,
-            password=config.database.password,
-            host=config.database.host,
-            port=config.database.port,
-            name=config.database.name,
+            user=config.provided.database.user,
+            password=config.provided.database.password,
+            host=config.provided.database.host,
+            port=config.provided.database.port,
+            name=config.provided.database.name,
         )
     )
 
@@ -53,30 +48,26 @@ class Container(containers.DeclarativeContainer):
         expire_on_commit=False,
     )
 
-    # -------------------
-    # Репозитории
-    # -------------------
+    # --- Репозитории ---
     processed_file_repo: providers.Factory[IProcessedFileRepository] = providers.Factory(
         ProcessedFileRepository,
-        session_factory=db_session_factory,
+        session=db_session_factory, # Исправлено с session_factory на session
     )
 
     operation_log_repo: providers.Factory[IOperationLogRepository] = providers.Factory(
         OperationLogRepository,
-        session_factory=db_session_factory,
+        session=db_session_factory, # Исправлено с session_factory на session
     )
 
-    # -------------------
-    # Сервисы Уведомлений
-    # -------------------
+    # --- Сервисы ---
     telegram_sender: providers.Factory[INotificationService] = providers.Factory(
         TelegramSender,
-        config=config.notifications.telegram,
+        config=config.provided.notifications.telegram,
     )
 
     email_sender: providers.Factory[INotificationService] = providers.Factory(
         EmailSender,
-        config=config.notifications.email,
+        config=config.provided.notifications.email,
     )
 
     # Композитный сервис, который отправляет по всем каналам
@@ -85,27 +76,24 @@ class Container(containers.DeclarativeContainer):
         email_sender,
     )
 
-    # -------------------
-    # Основные Сервисы
-    # -------------------
+    # --- Основные Сервисы ---
     email_reader_service: providers.Factory[IEmailReaderService] = providers.Factory(
         EmailReaderService,
-        config=config.email,
+        config=config.provided.email,
         processed_file_repo=processed_file_repo,
     )
 
     file_processing_service: providers.Factory[IFileProcessingService] = providers.Factory(
         FileProcessingService,
+        base_storage_path="storage" # Можно вынести в конфиг позже
     )
 
     sftp_upload_service: providers.Factory[ISftpUploadService] = providers.Factory(
         SftpUploadService,
-        config=config.sftp,
+        config=config.provided.sftp,
     )
 
-    # -------------------
-    # Обработчики
-    # -------------------
+    # --- Обработчики ---
     main_handler: providers.Factory[MainHandler] = providers.Factory(
         MainHandler,
         email_service=email_reader_service,
@@ -113,5 +101,5 @@ class Container(containers.DeclarativeContainer):
         sftp_service=sftp_upload_service,
         file_repo=processed_file_repo,
         log_repo=operation_log_repo,
-        notification_service=notification_service, # Добавляем сервис уведомлений
+        notification_service=notification_service,
     )

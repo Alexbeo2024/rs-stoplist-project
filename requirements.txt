@@ -7,7 +7,7 @@ uvicorn[standard]
 # =====================================
 # 2. Data Validation & Settings
 # =====================================
-pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 

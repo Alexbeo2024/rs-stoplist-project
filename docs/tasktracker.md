@@ -97,7 +97,7 @@
 **Описание:** Написать unit-тесты для проверки корректности работы сервисов в изоляции.
 **Шаги выполнения:**
 - [x] Написать тесты для `FileProcessingService`
-- [ ] Написать тесты для `EmailReaderService`
+- [x] Написать тесты для `EmailReaderService`
 - [ ] Написать тесты для `SftpUploadService`
 - [ ] Написать тесты для `NotificationService`
 

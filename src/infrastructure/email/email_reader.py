@@ -2,7 +2,7 @@
 # 1. Импорт библиотек
 # =====================================
 from typing import AsyncGenerator
-from imap_tools import MailBox, AND
+from imap_tools import MailBox
 
 from src.config import EmailConfig
 from src.domain.repositories import IProcessedFileRepository
@@ -35,13 +35,11 @@ class EmailReaderService(IEmailReaderService):
             with MailBox(self.config.server).login(
                 self.config.username, self.config.password, initial_folder='INBOX'
             ) as mailbox:
-                # Критерии поиска: непрочитанные письма от разрешенных отправителей
-                criteria = AND(seen=False, from_=self.config.allowed_senders)
-
-                for msg in mailbox.fetch(criteria, mark_seen=True):
+                # Передаем критерии напрямую в fetch
+                for msg in mailbox.fetch(criteria="ALL", seen=False, from_=self.config.allowed_senders, mark_seen=True):
                     print(f"Found new email: UID={msg.uid}, From={msg.from_}, Subject={msg.subject}")
+                    message_id = msg.uid # Используем UID, т.к. он стабилен в рамках сессии
 
-                    message_id = msg.uid
                     if await self.repo.find_by_message_id(message_id):
                         print(f"Message {message_id} already processed. Skipping.")
                         continue
