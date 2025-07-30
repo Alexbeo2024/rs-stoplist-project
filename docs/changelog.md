@@ -34,3 +34,10 @@
 - Создан файл `.dockerignore` для оптимизации контекста сборки.
 - Настроен `docker-compose.yml` с сервисами приложения, PostgreSQL и Adminer.
 - (Пропущено) Создание `.env.example` заблокировано, требуется ручное создание.
+
+## [2024-07-30] - Реализация основной бизнес-логики: Сервисный слой
+
+### ✅ Добавлено
+- В `src/domain/services/` определены абстрактные интерфейсы для сервисов `IEmailReaderService`, `IFileProcessingService`, `ISftpUploadService`.
+- Созданы placeholder-реализации для `EmailReaderService`, `FileProcessingService`, `SftpUploadService`.
+- В `src/application/handlers/main_handler.py` реализован главный сервис-оркестратор.
