@@ -41,3 +41,11 @@
 - В `src/domain/services/` определены абстрактные интерфейсы для сервисов `IEmailReaderService`, `IFileProcessingService`, `ISftpUploadService`.
 - Созданы placeholder-реализации для `EmailReaderService`, `FileProcessingService`, `SftpUploadService`.
 - В `src/application/handlers/main_handler.py` реализован главный сервис-оркестратор.
+
+## [2024-07-30] - Сборка: Dependency Injection и планировщик
+
+### ✅ Добавлено
+- В `requirements.txt` добавлены `dependency-injector` и `apscheduler`.
+- В `src/application/container.py` создан DI-контейнер для управления зависимостями.
+- В `src/application/schedulers/main_scheduler.py` настроен `APScheduler` для периодического запуска обработки.
+- В `src/application/api/main.py` интегрирован DI-контейнер и управление жизненным циклом планировщика.

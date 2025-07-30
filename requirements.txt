@@ -27,15 +27,22 @@ PyYAML
 # =====================================
 # aiosmtplib # Для асинхронной отправки email
 # asyncssh # Для асинхронной работы с SFTP
-# imap-tools # Для удобной работы с IMAP
+imap-tools # Для удобной работы с IMAP
+pandas # Для конвертации xlsx в csv
+openpyxl # Движок для pandas для работы с xlsx
 
 # =====================================
 # 6. Scheduling
 # =====================================
-# apscheduler
+apscheduler
 
 # =====================================
-# 7. Testing
+# 7. Dependency Injection
+# =====================================
+dependency-injector
+
+# =====================================
+# 8. Testing
 # =====================================
 pytest
 pytest-asyncio
@@ -43,7 +50,7 @@ httpx # Для асинхронных HTTP запросов в тестах
 respx # Для мокирования HTTP запросов
 
 # =====================================
-# 8. Linting & Formatting
+# 9. Linting & Formatting
 # =====================================
 black
 isort
