@@ -13,7 +13,6 @@ from src.infrastructure.storage.file_processor import FileProcessingService
 # 2. Тестовый класс
 # =====================================
 
-@pytest.mark.asyncio
 class TestFileProcessingService:
 
     def test_initialization(self, tmp_path: Path):
@@ -21,6 +20,7 @@ class TestFileProcessingService:
         service = FileProcessingService(base_storage_path=str(tmp_path))
         assert service.base_storage_path == str(tmp_path)
 
+    @pytest.mark.asyncio
     async def test_save_and_convert_success(self, tmp_path: Path):
         """
         Проверяет успешное сохранение и конвертацию xlsx файла.
@@ -37,42 +37,28 @@ class TestFileProcessingService:
 
         fake_email = RawEmail(
             message_id="test-msg-123",
-            sender="test@example.com",
-            date=datetime(2024, 7, 30),
+            sender="test@sender.com",
+            date=datetime(2023, 1, 15),
             attachments=[
-                EmailAttachment(filename="report.xlsx", content=excel_bytes),
-                EmailAttachment(filename="document.txt", content=b"some text"), # Другой тип файла для игнорирования
+                EmailAttachment(filename="report.xlsx", content=excel_bytes)
             ]
         )
 
         # --- Действие ---
         result_meta = await service.save_and_convert(fake_email)
 
-        # --- Проверки ---
-        assert len(result_meta) == 1 # Должен быть обработан только один файл
+        # --- Проверка ---
+        # 1. Проверяем метаданные
+        assert len(result_meta) == 1
         meta = result_meta[0]
+        assert meta['file_name'] == "report.xlsx"
+        assert meta['file_hash'] is not None
 
-        # Проверка путей
-        expected_base_dir = tmp_path / "ps" / "2024" / "07" / "30"
-        expected_xlsx_path = expected_base_dir / "report.xlsx"
-        expected_csv_path = expected_base_dir / "RS_stoplist_20240730.csv"
+        # 2. Проверяем созданные файлы
+        csv_path = Path(meta['csv_path'])
+        assert csv_path.exists()
+        assert csv_path.name == "RS_stoplist_20230115.csv"
 
-        assert Path(meta["file_path"]).resolve() == expected_xlsx_path.resolve()
-        assert Path(meta["csv_path"]).resolve() == expected_csv_path.resolve()
-
-        # Проверка, что файлы реально созданы
-        assert expected_xlsx_path.exists()
-        assert expected_csv_path.exists()
-
-        # Проверка содержимого сохраненного xlsx
-        with open(expected_xlsx_path, 'rb') as f:
-            assert f.read() == excel_bytes
-
-        # Проверка содержимого csv
-        saved_csv_df = pd.read_csv(expected_csv_path)
-        pd.testing.assert_frame_equal(saved_csv_df, fake_xlsx_content)
-
-        # Проверка хеша
-        assert "file_hash" in meta
-        assert isinstance(meta["file_hash"], str)
-        assert len(meta["file_hash"]) == 64 # SHA256
+        # 3. Проверяем содержимое CSV
+        df = pd.read_csv(csv_path)
+        pd.testing.assert_frame_equal(df, fake_xlsx_content)

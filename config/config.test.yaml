@@ -1,0 +1,34 @@
+# Копия config.yaml, но с настройками для тестового окружения
+
+email:
+  server: "imap.gmail.com"
+  port: 993
+  username: "${EMAIL_USER}"
+  password: "${EMAIL_PASS}"
+  allowed_senders:
+    - "sender@domain.com"
+
+database:
+  host: "db" # Используем имя сервиса из docker-compose
+  port: 5432
+  user: "${POSTGRES_USER}"
+  password: "${POSTGRES_PASSWORD}"
+  name: "${POSTGRES_DB}"
+
+sftp:
+  host: "sftp" # Используем имя сервиса из docker-compose
+  username: "sftpuser"
+  key_path: "/root/.ssh/id_rsa" # Путь внутри контейнера app
+  remote_path: "/upload"
+
+notifications:
+  email:
+    smtp_server: "smtp.gmail.com"
+    recipients:
+      - "admin@company.com"
+  telegram:
+    bot_token: "${TG_BOT_TOKEN}"
+    chat_id: "${TG_CHAT_ID}"
+
+scheduler:
+  interval_hours: 1

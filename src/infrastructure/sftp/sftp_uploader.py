@@ -34,12 +34,19 @@ class SftpUploadService(ISftpUploadService):
         for attempt in range(max_retries):
             try:
                 print(f"Attempt {attempt + 1}/{max_retries}: Connecting to SFTP...")
-                async with asyncssh.connect(**self.connection_options) as conn:
-                    async with conn.start_sftp_client() as sftp:
+                conn = await asyncssh.connect(**self.connection_options)
+                try:
+                    sftp = await conn.start_sftp_client()
+                    try:
                         print(f"Uploading {local_path} to {remote_path}...")
                         await sftp.put(local_path, remote_path)
                         print("Upload successful.")
                         return True
+                    finally:
+                        sftp.exit()
+                finally:
+                    conn.close()
+                    await conn.wait_closed()
             except (asyncssh.Error, OSError) as e:
                 print(f"SFTP attempt {attempt + 1} failed: {e}")
                 if attempt < max_retries - 1:

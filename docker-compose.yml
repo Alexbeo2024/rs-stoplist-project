@@ -42,5 +42,15 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  sftp:
+    image: atmoz/sftp
+    container_name: email_processor_sftp
+    volumes:
+      - ./storage/sftp_upload:/home/sftpuser/upload
+      - ~/.ssh/id_rsa.pub:/home/sftpuser/.ssh/keys/id_rsa.pub:ro
+    ports:
+      - "2222:22"
+    command: sftpuser:pass:1001
+
 volumes:
   postgres_data:

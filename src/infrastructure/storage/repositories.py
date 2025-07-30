@@ -1,9 +1,10 @@
 # =====================================
 # 1. Импорт библиотек
 # =====================================
-from typing import Optional, List, Type
+from typing import Optional, List, Type, Dict
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.orm import sessionmaker
@@ -37,7 +38,7 @@ class OperationLog(Base):
     operation_type: Mapped[str]
     status: Mapped[str]
     message: Mapped[Optional[str]]
-    context: Mapped[Optional[dict]]
+    context: Mapped[Optional[Dict]] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[Optional[str]]
 
 

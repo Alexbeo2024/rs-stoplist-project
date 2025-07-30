@@ -60,13 +60,12 @@ class AppConfig(BaseSettings):
 
 @lru_cache()
 def get_config() -> AppConfig:
-    # Определяем корень проекта как родителя директории 'src'
-    # __file__ -> /path/to/project/src/config/__init__.py
-    # os.path.dirname(__file__) -> /path/to/project/src/config
-    # os.path.dirname(os.path.dirname(__file__)) -> /path/to/project/src
-    # os.path.dirname(os.path.dirname(os.path.dirname(__file__))) -> /path/to/project
+    # Определяем путь к конфигу. По умолчанию 'config/config.yaml',
+    # но можно переопределить через переменную окружения.
+    config_file = os.getenv("CONFIG_PATH", "config/config.yaml")
+
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    config_path = os.path.join(project_root, "config", "config.yaml")
+    config_path = os.path.join(project_root, config_file)
 
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found at: {config_path}")
