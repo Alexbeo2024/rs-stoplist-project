@@ -26,3 +26,11 @@
 - Настроен модуль `src/infrastructure/storage/database.py` для асинхронной работы с БД.
 - В `src/domain/repositories/__init__.py` определены абстрактные интерфейсы репозиториев.
 - В `src/infrastructure/storage/repositories.py` реализованы конкретные репозитории на SQLAlchemy.
+
+## [2024-07-30] - Настройка Docker и Docker Compose
+
+### ✅ Добавлено
+- Создан многостадийный `Dockerfile` для сборки production-образа.
+- Создан файл `.dockerignore` для оптимизации контекста сборки.
+- Настроен `docker-compose.yml` с сервисами приложения, PostgreSQL и Adminer.
+- (Пропущено) Создание `.env.example` заблокировано, требуется ручное создание.
