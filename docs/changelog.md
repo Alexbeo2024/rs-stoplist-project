@@ -5,3 +5,10 @@
 - Инициализирован Git-репозиторий.
 - Созданы файлы `docs/changelog.md` и `docs/tasktracker.md`.
 - Добавлен файл `.gitignore`.
+
+## [2024-07-30] - Конфигурация и модели данных
+
+### ✅ Добавлено
+- Создан файл `config/config.yaml` с базовой конфигурацией.
+- Определены Pydantic-модели `ProcessedFile` и `OperationLog` в `src/domain/models/`.
+- Создан SQL-скрипт `docs/schema.sql` для определения схемы БД.
