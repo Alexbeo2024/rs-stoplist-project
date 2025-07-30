@@ -13,6 +13,7 @@ services:
     volumes:
       - ./src:/opt/app/src
       - ./config:/opt/app/config
+      - ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro # Монтируем ключ в read-only
     depends_on:
       db:
         condition: service_healthy

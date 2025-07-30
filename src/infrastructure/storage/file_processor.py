@@ -62,7 +62,7 @@ class FileProcessingService(IFileProcessingService):
             csv_path = os.path.join(full_path, csv_filename)
 
             try:
-                df = pd.read_excel(xlsx_path)
+                df = pd.read_excel(xlsx_path, engine='openpyxl')
                 df.to_csv(csv_path, index=False, encoding='utf-8-sig')
             except Exception as e:
                 print(f"Error converting file {attachment.filename} to CSV: {e}")
