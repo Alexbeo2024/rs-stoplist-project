@@ -1,0 +1,141 @@
+# =====================================
+# Pre-commit Configuration
+# =====================================
+# Настройка автоматических проверок кода перед коммитами
+# Запуск: pre-commit install (один раз)
+# Ручной запуск: pre-commit run --all-files
+
+repos:
+  # Базовые проверки файлов
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Удаление пробелов в конце строк
+      - id: end-of-file-fixer
+        name: Проверка символа новой строки в конце файла
+      - id: check-yaml
+        name: Валидация YAML файлов
+      - id: check-toml
+        name: Валидация TOML файлов
+      - id: check-json
+        name: Валидация JSON файлов
+      - id: check-merge-conflict
+        name: Проверка конфликтов merge
+      - id: check-case-conflict
+        name: Проверка конфликтов регистра в именах файлов
+      - id: check-executables-have-shebangs
+        name: Проверка shebang в исполняемых файлах
+      - id: check-added-large-files
+        name: Проверка размера добавленных файлов
+        args: ['--maxkb=1000']  # Максимум 1MB
+      - id: debug-statements
+        name: Проверка debug statements (pdb, ipdb)
+      - id: check-ast
+        name: Проверка синтаксиса Python файлов
+
+  # Black - форматирование кода
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        name: Форматирование кода (Black)
+        language_version: python3.11
+        args: [--line-length=120]
+
+  # isort - сортировка импортов
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Сортировка импортов (isort)
+        args: [--profile=black, --line-length=120]
+
+  # Ruff - быстрый линтер
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.9
+    hooks:
+      - id: ruff
+        name: Линтинг кода (Ruff)
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # MyPy - проверка типов
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: Проверка типов (MyPy)
+        additional_dependencies:
+          - types-PyYAML
+          - types-requests
+          - pydantic
+        args: [--strict, --ignore-missing-imports]
+        exclude: ^(tests/|migrations/)
+
+  # Bandit - анализ безопасности
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        name: Анализ безопасности (Bandit)
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ['bandit[toml]']
+        exclude: ^tests/
+
+  # Проверка requirements.txt
+  - repo: https://github.com/pycqa/pip-audit
+    rev: v2.6.1
+    hooks:
+      - id: pip-audit
+        name: Аудит безопасности зависимостей
+        args: [--requirement, requirements.txt, --format=text]
+
+  # Проверка секретов и чувствительных данных
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Поиск секретов в коде
+        args: ['--baseline', '.secrets.baseline']
+        exclude: .*(\.lock|\.min\.js|\.map)$
+
+  # Проверка орфографии в комментариях (опционально)
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.2.6
+    hooks:
+      - id: codespell
+        name: Проверка орфографии
+        args: [--skip=*.po,*.ts,*.json,*.lock,node_modules]
+        exclude: ^(.*\.po|.*\.lock|node_modules/)
+
+# =====================================
+# Конфигурация по умолчанию
+# =====================================
+default_language_version:
+  python: python3.11
+
+# Исключения для всех hooks
+exclude: |
+  (?x)
+  # Исключаем определенные файлы и директории
+  ^(
+    \.git/.*|
+    \.venv/.*|
+    venv/.*|
+    node_modules/.*|
+    migrations/.*|
+    .*\.min\.(js|css)|
+    .*\.map
+  )$
+
+# Настройки CI режима
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: [pip-audit]  # Пропускаем pip-audit в CI (может быть медленным)

@@ -96,3 +96,9 @@ config.yaml
 # Logs
 logs/
 *.log
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+.coverage.*

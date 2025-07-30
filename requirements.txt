@@ -51,6 +51,7 @@ prometheus-client
 # =====================================
 pytest
 pytest-asyncio
+pytest-cov # Анализ покрытия тестами
 httpx # Для асинхронных HTTP запросов в тестах
 respx # Для мокирования HTTP запросов
 
@@ -61,3 +62,9 @@ black
 isort
 ruff
 mypy
+
+# =====================================
+# 11. Security & Code Quality
+# =====================================
+bandit[toml] # Анализатор безопасности Python кода
+pre-commit # Pre-commit hooks для автоматических проверок
