@@ -1,0 +1,270 @@
+# Product Requirements Document: Автоматизированная система обработки Excel-файлов
+
+<context>
+# Overview
+Система автоматизированной обработки Excel-файлов из email-вложений с конвертацией в CSV и передачей на SFTP-сервер. Решает проблему ручной обработки файлов отчетности, обеспечивая надежную автоматизацию с мониторингом и уведомлениями о статусе операций.
+
+Целевая аудитория: корпоративные пользователи, которым необходима регулярная обработка табличных данных из email с их последующей передачей в централизованные системы хранения.
+
+# Core Features
+## Email-мониторинг
+- Автоматическое подключение к почтовому серверу (IMAP/POP3) каждый час
+- Фильтрация писем по whitelist отправителей
+- Обработка только .xlsx вложений
+- Дедупликация по Message-ID для предотвращения повторной обработки
+
+## Файловая структура и конвертация
+- Организация файлов по структуре ps/{YYYY}/{MM}/{DD}/ на основе даты письма
+- Конвертация Excel в CSV формат с UTF-8 BOM кодировкой
+- Стандартизированное именование: RS_stoplist_{YYYYMMDD}.csv
+
+## SFTP-интеграция
+- Безопасная передача файлов через SFTP с key-based аутентификацией
+- Retry логика с exponential backoff (3 попытки)
+- Валидация целостности через checksums
+
+## Система уведомлений
+- Многоканальные уведомления (Email + Telegram Bot)
+- Structured alerts с полным контекстом ошибок
+- Мониторинг критических операций и автоматические escalation
+
+# User Experience
+## Администраторы системы
+- Получение уведомлений о статусе операций
+- Доступ к веб-интерфейсу для мониторинга
+- Возможность ручного запуска обработки
+
+## Операторы
+- Автоматическая обработка без вмешательства
+- Получение alerts при сбоях
+- Доступ к логам операций
+
+## Ключевые пользовательские потоки
+1. Настройка системы через конфигурационные файлы
+2. Автоматический мониторинг email без участия пользователя
+3. Получение уведомлений о статусе операций
+4. Просмотр health checks и метрик через веб-интерфейс
+</context>
+
+<PRD>
+# Technical Architecture
+
+## System Components
+### Backend (Python 3.11+ FastAPI)
+- Асинхронная архитектура с asyncio
+- Clean Architecture с разделением на layers
+- Dependency Injection контейнер
+- SQLAlchemy ORM для работы с PostgreSQL
+
+### Планировщик задач
+- APScheduler для периодических задач
+- Асинхронные background tasks
+- Graceful shutdown и restart capabilities
+
+### База данных (PostgreSQL 15+)
+- Таблица processed_files для трекинга обработанных файлов
+- Таблица operation_logs для аудита операций
+- Индексы для оптимизации запросов по датам и статусам
+
+### Внешние интеграции
+- IMAP/POP3 email клиент с connection pooling
+- SFTP клиент с retry механизмами
+- SMTP клиент для отправки уведомлений
+- Telegram Bot API для instant alerts
+
+## Data Models
+```python
+# processed_files: message_id, sender_email, file_name, file_path, csv_path, sftp_uploaded, file_hash, processed_at, email_date
+# operation_logs: operation_type, status, message, context (JSONB), created_at
+```
+
+## APIs and Integrations
+- Health checks endpoints (/health/live, /health/ready)
+- Metrics endpoint для Prometheus (/metrics)
+- Manual processing trigger API
+- Configuration management API
+
+## Infrastructure Requirements
+- Docker containerization с multi-stage builds
+- Redis для distributed locking (если multiple instances)
+- Monitoring через structured logging
+- Secret management через environment variables
+
+# Development Roadmap
+
+## Phase 1: Core Infrastructure (MVP)
+### Database Setup
+- PostgreSQL схема с миграциями
+- SQLAlchemy models и repositories
+- Connection pooling и health checks
+
+### Basic Email Processing
+- IMAP подключение и чтение писем
+- Базовая фильтрация по отправителям
+- Excel файл extraction из attachments
+
+### File System Operations
+- Создание директорийной структуры ps/{YYYY}/{MM}/{DD}/
+- Excel to CSV конвертация с правильной кодировкой
+- File integrity validation
+
+## Phase 2: Automation & Scheduling
+### APScheduler Integration
+- Hourly email checking scheduler
+- Async task execution
+- Error handling и retry logic
+
+### SFTP Upload
+- Key-based authentication
+- Retry mechanism с exponential backoff
+- Checksum validation после загрузки
+
+### Basic Logging
+- Structured logging с correlation IDs
+- Operation status tracking в database
+- Basic error categorization
+
+## Phase 3: Monitoring & Notifications
+### Notification System
+- Email alerts через SMTP
+- Telegram Bot integration
+- Configurable alert thresholds
+
+### Health Monitoring
+- FastAPI health check endpoints
+- Prometheus metrics exposure
+- Database connectivity monitoring
+
+### Web Interface
+- Basic status dashboard
+- Recent operations log view
+- Manual processing trigger
+
+## Phase 4: Production Readiness
+### Enhanced Error Handling
+- Comprehensive error categorization
+- Graceful degradation strategies
+- Circuit breaker patterns для external services
+
+### Security Hardening
+- Secret rotation capabilities
+- Audit logging enhancement
+- Rate limiting и DDoS protection
+
+### Performance Optimization
+- Connection pooling optimization
+- Async processing improvements
+- Database query optimization
+
+# Logical Dependency Chain
+
+## Foundation Layer (Build First)
+1. **Database Setup** - основа для всех операций
+2. **Configuration Management** - необходимо для всех компонентов
+3. **Logging Infrastructure** - критично для debugging
+
+## Core Processing Layer
+4. **Email Reader** - зависит от database и config
+5. **File Processor** - зависит от email reader
+6. **SFTP Uploader** - зависит от file processor
+
+## Automation Layer
+7. **Scheduler** - зависит от core processing components
+8. **Error Handling** - зависит от всех предыдущих компонентов
+
+## Monitoring Layer
+9. **Notifications** - зависит от error handling
+10. **Health Checks** - зависит от всех core components
+11. **Web Interface** - зависит от health checks и database
+
+## Production Layer
+12. **Metrics Collection** - зависит от monitoring layer
+13. **Security Enhancements** - применяется ко всем компонентам
+14. **Performance Optimization** - финальный этап улучшений
+
+# Risks and Mitigations
+
+## Technical Challenges
+### Email Server Connectivity
+- **Risk**: Нестабильное соединение с email сервером
+- **Mitigation**: Connection pooling, retry logic, fallback email servers
+
+### File Corruption
+- **Risk**: Поврежденные Excel файлы
+- **Mitigation**: File validation, checksum verification, backup storage
+
+### SFTP Authentication
+- **Risk**: Проблемы с SSH key authentication
+- **Mitigation**: Key rotation mechanism, multiple auth methods support
+
+## MVP Scope Definition
+### Minimum Viable Product
+- Базовая обработка одного типа Excel файлов
+- Простая email фильтрация по одному отправителю
+- Основные уведомления только по email
+- Минимальный web interface для статуса
+
+### Build Upon Strategy
+- Модульная архитектура для легкого расширения
+- Plugin system для новых типов файлов
+- Configurable notification channels
+- API-first подход для интеграций
+
+## Resource Constraints
+### Development Resources
+- **Risk**: Ограниченное время разработки
+- **Mitigation**: Четкое разделение на phases, automated testing
+
+### Infrastructure Costs
+- **Risk**: Затраты на cloud infrastructure
+- **Mitigation**: Efficient resource usage, auto-scaling policies
+
+# Appendix
+
+## Technical Specifications
+### Email Configuration
+```yaml
+email:
+  server: "imap.gmail.com"
+  port: 993
+  username: "${EMAIL_USER}"
+  password: "${EMAIL_PASS}"
+  allowed_senders: ["sender@domain.com"]
+  check_interval: 3600  # seconds
+```
+
+### SFTP Configuration
+```yaml
+sftp:
+  host: "${SFTP_HOST}"
+  username: "${SFTP_USER}"
+  key_path: "/path/to/private_key"
+  remote_path: "/upload/directory"
+  retry_attempts: 3
+  retry_delay: 30  # seconds
+```
+
+### File Processing Rules
+- Input format: .xlsx только
+- Output format: CSV с UTF-8 BOM
+- Naming convention: RS_stoplist_{YYYYMMDD}.csv
+- Directory structure: ps/{YYYY}/{MM}/{DD}/
+
+## Performance Requirements
+- Process 1000+ files daily без деградации
+- Recovery time < 5 минут при сбоях
+- API response time < 200ms для health checks
+- Alert delivery time < 30 секунд
+
+## Security Requirements
+- Encrypted connections для всех external services
+- Secret management через environment variables
+- Audit logging для всех операций
+- Regular security scanning с Bandit
+
+## Quality Assurance
+- Test coverage минимум 85%
+- Automated testing с pytest + pytest-asyncio
+- Code quality с Black + isort + mypy + ruff
+- Documentation с Google style docstrings
+</PRD>
