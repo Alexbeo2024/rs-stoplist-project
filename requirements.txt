@@ -42,7 +42,12 @@ apscheduler
 dependency-injector
 
 # =====================================
-# 8. Testing
+# 8. Monitoring
+# =====================================
+prometheus-client
+
+# =====================================
+# 9. Testing
 # =====================================
 pytest
 pytest-asyncio
@@ -50,7 +55,7 @@ httpx # Для асинхронных HTTP запросов в тестах
 respx # Для мокирования HTTP запросов
 
 # =====================================
-# 9. Linting & Formatting
+# 10. Linting & Formatting
 # =====================================
 black
 isort

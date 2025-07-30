@@ -114,8 +114,24 @@ async def detailed_health_check():
 
 @app.get("/metrics", tags=["Monitoring"])
 async def metrics():
-    """Метрики для Prometheus."""
+    """Метрики для Prometheus в стандартном формате."""
+    from src.infrastructure.monitoring.metrics import metrics as prometheus_metrics
+
     logger = get_logger(__name__)
     logger.debug("Metrics endpoint accessed")
-    # TODO: Интегрировать Prometheus client library
-    return Response(content="# Metrics placeholder", media_type="text/plain")
+
+    try:
+        # Получаем метрики в формате Prometheus
+        metrics_data = prometheus_metrics.get_metrics()
+
+        return Response(
+            content=metrics_data,
+            media_type="text/plain; version=0.0.4; charset=utf-8"
+        )
+    except Exception as e:
+        logger.error(f"Error generating metrics: {e}", exc_info=True)
+        return Response(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=f"Error generating metrics: {str(e)}",
+            media_type="text/plain"
+        )

@@ -8,6 +8,7 @@ from src.domain.services import IEmailReaderService, IFileProcessingService, ISf
 from src.domain.models import ProcessedFile, OperationLog
 from src.domain.services.notifications import INotificationService, AlertMessage
 from src.infrastructure.logging.logger import get_logger
+from src.infrastructure.monitoring.metrics import metrics
 
 # =====================================
 # 2. Главный обработчик
@@ -179,4 +180,9 @@ class MainHandler:
             await self._send_alert(alert)
 
         finally:
+            # Обновляем метрики в конце цикла
+            metrics.set_active_jobs(0)
+            if processed_count > 0:
+                metrics.update_last_successful_processing()
+
             self.logger.info(f"Email processing cycle completed. Processed: {processed_count}, Errors: {error_count}")
