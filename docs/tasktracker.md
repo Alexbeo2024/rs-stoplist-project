@@ -87,6 +87,6 @@
 - [x] Реализовать `FileProcessingService`
 - [x] Реализовать `EmailReaderService`
 - [x] Реализовать `SftpUploadService`
-- [ ] Реализовать отправку уведомлений
+- [x] Реализовать отправку уведомлений
 
 **Зависимости:** Сборка: Dependency Injection и планировщик

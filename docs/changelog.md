@@ -65,3 +65,10 @@
 
 ### ✅ Изменено
 - В `src/infrastructure/sftp/sftp_uploader.py` реализована логика загрузки файлов по SFTP с использованием `asyncssh`, включая 3 попытки с exponential backoff.
+
+## [2024-07-30] - Реализация сервиса уведомлений
+
+### ✅ Добавлено
+- В `src/domain/services/notifications.py` определен интерфейс для отправки уведомлений.
+- Реализованы сервисы для отправки уведомлений в Telegram (`TelegramSender`) и по Email (`EmailSender`).
+- Сервисы уведомлений интегрированы в DI-контейнер и `MainHandler`.

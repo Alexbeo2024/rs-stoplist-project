@@ -1,9 +1,12 @@
 # =====================================
 # 1. Импорт библиотек
 # =====================================
+from typing import List
+
 from src.domain.repositories import IProcessedFileRepository, IOperationLogRepository
 from src.domain.services import IEmailReaderService, IFileProcessingService, ISftpUploadService
 from src.domain.models import ProcessedFile, OperationLog
+from src.domain.services.notifications import INotificationService, AlertMessage
 
 # =====================================
 # 2. Реализация главного обработчика
@@ -20,12 +23,19 @@ class MainHandler:
         sftp_service: ISftpUploadService,
         file_repo: IProcessedFileRepository,
         log_repo: IOperationLogRepository,
+        notification_service: List[INotificationService],
     ):
         self.email_service = email_service
         self.file_service = file_service
         self.sftp_service = sftp_service
         self.file_repo = file_repo
         self.log_repo = log_repo
+        self.notification_service = notification_service
+
+    async def _send_alert(self, alert: AlertMessage):
+        """Отправляет уведомление по всем настроенным каналам."""
+        for service in self.notification_service:
+            await service.send(alert)
 
     async def process_emails(self):
         """
@@ -60,6 +70,14 @@ class MainHandler:
 
             except Exception as e:
                 # Логирование ошибок
+                alert = AlertMessage(
+                    error_type=e.__class__.__name__,
+                    service_name="MainHandler",
+                    message=f"Failed to process email {email.message_id}: {e}",
+                    context={"message_id": email.message_id}
+                )
+                await self._send_alert(alert)
+
                 await self.log_repo.add(OperationLog(
                     operation_type="EMAIL_PROCESSING",
                     status="ERROR",

@@ -8,7 +8,10 @@ from sqlalchemy.orm import sessionmaker
 from src.config import config
 from src.domain.repositories import IProcessedFileRepository, IOperationLogRepository
 from src.domain.services import IEmailReaderService, IFileProcessingService, ISftpUploadService
+from src.domain.services.notifications import INotificationService
 from src.infrastructure.email.email_reader import EmailReaderService
+from src.infrastructure.notifications.email_sender import EmailSender
+from src.infrastructure.notifications.telegram_sender import TelegramSender
 from src.infrastructure.sftp.sftp_uploader import SftpUploadService
 from src.infrastructure.storage.repositories import ProcessedFileRepository, OperationLogRepository
 from src.infrastructure.storage.file_processor import FileProcessingService
@@ -58,7 +61,26 @@ class Container(containers.DeclarativeContainer):
     )
 
     # -------------------
-    # Сервисы
+    # Сервисы Уведомлений
+    # -------------------
+    telegram_sender: providers.Factory[INotificationService] = providers.Factory(
+        TelegramSender,
+        config=config.notifications.telegram,
+    )
+
+    email_sender: providers.Factory[INotificationService] = providers.Factory(
+        EmailSender,
+        config=config.notifications.email,
+    )
+
+    # Композитный сервис, который отправляет по всем каналам
+    notification_service: providers.List[INotificationService] = providers.List(
+        telegram_sender,
+        email_sender,
+    )
+
+    # -------------------
+    # Основные Сервисы
     # -------------------
     email_reader_service: providers.Factory[IEmailReaderService] = providers.Factory(
         EmailReaderService,
@@ -85,4 +107,5 @@ class Container(containers.DeclarativeContainer):
         sftp_service=sftp_upload_service,
         file_repo=processed_file_repo,
         log_repo=operation_log_repo,
+        notification_service=notification_service, # Добавляем сервис уведомлений
     )
