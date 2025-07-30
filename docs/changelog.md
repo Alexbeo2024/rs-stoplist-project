@@ -12,3 +12,10 @@
 - Создан файл `config/config.yaml` с базовой конфигурацией.
 - Определены Pydantic-модели `ProcessedFile` и `OperationLog` в `src/domain/models/`.
 - Создан SQL-скрипт `docs/schema.sql` для определения схемы БД.
+
+## [2024-07-30] - Настройка зависимостей и базового приложения
+
+### ✅ Добавлено
+- Создан файл `requirements.txt` с основными зависимостями.
+- Создано базовое FastAPI-приложение `src/application/api/main.py` с health-check эндпоинтами.
+- Реализован модуль `src/config/__init__.py` для загрузки и валидации конфигурации.
