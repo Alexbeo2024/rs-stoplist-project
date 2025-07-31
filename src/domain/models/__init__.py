@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field
 
 # =====================================
 # 2. Базовые модели
@@ -17,7 +17,7 @@ class ProcessedFile(BaseModel):
     """
     id: Optional[int] = Field(None, description="Уникальный идентификатор записи")
     message_id: str = Field(..., description="Уникальный идентификатор email-сообщения")
-    sender_email: EmailStr = Field(..., description="Email отправителя")
+    sender_email: str = Field(..., description="Email отправителя")
     file_name: str = Field(..., description="Имя исходного файла")
     file_path: str = Field(..., description="Путь к сохраненному .xlsx файлу")
     csv_path: Optional[str] = Field(None, description="Путь к сконвертированному .csv файлу")
@@ -27,7 +27,7 @@ class ProcessedFile(BaseModel):
     email_date: datetime = Field(..., description="Дата из заголовка письма")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class OperationLog(BaseModel):
     """
@@ -42,4 +42,4 @@ class OperationLog(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="Время создания лога")
 
     class Config:
-        orm_mode = True
+        from_attributes = True

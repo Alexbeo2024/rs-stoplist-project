@@ -13,7 +13,7 @@ container = Container()
 async def lifespan(app: FastAPI):
     """Управление жизненным циклом приложения."""
     # Получаем конфигурацию и инициализируем логгирование
-    config = await container.config()
+    config = container.config()
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     setup_logging(config.logging, project_root)
 
