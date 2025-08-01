@@ -1,956 +1,469 @@
-# 🚀 **РУКОВОДСТВО ПО РАЗВЕРТЫВАНИЮ НА GITHUB**
-## Автоматизированная система обработки Excel-файлов
+# 🚀 **РУКОВОДСТВО ПО РАЗВЕРТЫВАНИЮ**
 
-**Автор:** DevOps Engineer с 20+ летним опытом
-**Дата:** 30 января 2025 г.
-**Версия:** 1.0
+*Автоматизированная система обработки Excel-файлов из email вложений*
 
 ---
 
-## 📋 **СОДЕРЖАНИЕ**
+## 📋 **КРАТКИЙ ОБЗОР**
 
-1. [Подготовка к развертыванию](#подготовка-к-развертыванию)
-2. [Настройка GitHub Repository](#настройка-github-repository)
-3. [GitHub Actions CI/CD Pipeline](#github-actions-cicd-pipeline)
-4. [Docker Container Registry](#docker-container-registry)
-5. [Развертывание на GitHub Codespaces](#развертывание-на-github-codespaces)
-6. [Развертывание на VPS/Cloud](#развертывание-на-vpscloud)
-7. [Мониторинг и логирование](#мониторинг-и-логирование)
-8. [Security & Secrets Management](#security--secrets-management)
-9. [Troubleshooting](#troubleshooting)
+Эта система автоматически:
+1. **Мониторит почту** → Ищет Excel вложения (.xlsx)
+2. **Конвертирует** → Excel в CSV (UTF-8 BOM)
+3. **Загружает** → CSV файлы на SFTP сервер
+4. **Уведомляет** → Email + Telegram (опционально)
+5. **Логирует** → Полный аудит в PostgreSQL
 
 ---
 
-## 🔧 **ПОДГОТОВКА К РАЗВЕРТЫВАНИЮ**
+## 🎯 **БЫСТРЫЙ СТАРТ (5 минут)**
 
-### **Шаг 1: Проверка готовности проекта**
-
+### **1️⃣ Клонирование репозитория:**
 ```bash
-# Убедитесь что приложение работает локально
-docker-compose up -d
-python3 quick_test.py
-
-# Очистка локальных контейнеров
-docker-compose down -v
-```
-
-### **Шаг 2: Подготовка файлов для GitHub**
-
-Создадим необходимые файлы для автоматизации:
-
-#### `.github/workflows/` структура:
-```
-.github/
-├── workflows/
-│   ├── ci.yml              # Continuous Integration
-│   ├── cd.yml              # Continuous Deployment
-│   ├── security-scan.yml   # Security scanning
-│   └── dependency-update.yml # Automated dependency updates
-├── ISSUE_TEMPLATE/         # Issue templates
-├── pull_request_template.md # PR template
-└── dependabot.yml          # Dependabot configuration
-```
-
----
-
-## 📁 **НАСТРОЙКА GITHUB REPOSITORY**
-
-### **Шаг 1: Создание репозитория**
-
-```bash
-# Если репозитория еще нет
-gh repo create rs-stoplist-project --public --description "Автоматизированная система обработки Excel-файлов из email"
-
-# Инициализация git (если еще не сделано)
-git init
-git add .
-git commit -m "feat: initial commit - production-ready Excel processing system"
-git branch -M main
-git remote add origin https://github.com/YOURUSERNAME/rs-stoplist-project.git
-git push -u origin main
-```
-
-### **Шаг 2: Настройка GitHub Settings**
-
-В GitHub Repository Settings:
-
-1. **General** → **Features**:
-   - ✅ Issues
-   - ✅ Discussions
-   - ✅ Projects
-   - ✅ Wiki
-
-2. **Security** → **Code security and analysis**:
-   - ✅ Dependency graph
-   - ✅ Dependabot alerts
-   - ✅ Dependabot security updates
-   - ✅ Code scanning
-   - ✅ Secret scanning
-
-3. **Actions** → **General**:
-   - ✅ Allow all actions and reusable workflows
-
----
-
-## 🔄 **GITHUB ACTIONS CI/CD PIPELINE**
-
-### **Файл 1: `.github/workflows/ci.yml`** (Continuous Integration)
-
-```yaml
-name: 🔍 Continuous Integration
-
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
-jobs:
-  # =====================================
-  # 1. ЛИНТИНГ И КАЧЕСТВО КОДА
-  # =====================================
-  code-quality:
-    name: 📝 Code Quality & Linting
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐍 Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install bandit[toml] black isort ruff mypy
-
-    - name: 🖤 Code formatting (Black)
-      run: black --check --diff src/ tests/
-
-    - name: 📚 Import sorting (isort)
-      run: isort --check-only --diff src/ tests/
-
-    - name: ⚡ Fast linting (Ruff)
-      run: ruff check src/ tests/
-
-    - name: 🔍 Type checking (MyPy)
-      run: mypy src/ --ignore-missing-imports
-
-    - name: 🔒 Security scan (Bandit)
-      run: bandit -r src/ -f json -o bandit-report.json
-
-    - name: 📊 Upload Bandit results
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: bandit-results
-        path: bandit-report.json
-
-  # =====================================
-  # 2. ТЕСТИРОВАНИЕ
-  # =====================================
-  test:
-    name: 🧪 Run Tests
-    runs-on: ubuntu-latest
-    needs: code-quality
-
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: emailprocessor
-          POSTGRES_PASSWORD: secure_password_123
-          POSTGRES_DB: email_processor_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐍 Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: 🧪 Run unit tests
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_PORT: 5432
-        POSTGRES_USER: emailprocessor
-        POSTGRES_PASSWORD: secure_password_123
-        POSTGRES_DB: email_processor_db
-      run: |
-        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
-
-    - name: 📊 Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        fail_ci_if_error: true
-
-  # =====================================
-  # 3. DOCKER BUILD
-  # =====================================
-  docker-build:
-    name: 🐳 Docker Build & Test
-    runs-on: ubuntu-latest
-    needs: [code-quality, test]
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐳 Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: 🔐 Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: 📝 Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-
-    - name: 🔨 Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-
-    - name: 🧪 Test Docker container
-      run: |
-        docker run --rm -d --name test-container \
-          -p 8000:8000 \
-          -e ENVIRONMENT=test \
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-        # Wait for container to start
-        sleep 30
-
-        # Test basic functionality
-        curl -f http://localhost:8000/health/live || exit 1
-        curl -f http://localhost:8000/metrics || exit 1
-
-        docker stop test-container
-
-  # =====================================
-  # 4. SECURITY SCANNING
-  # =====================================
-  security-scan:
-    name: 🔒 Security Scanning
-    runs-on: ubuntu-latest
-    needs: docker-build
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🔍 Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-
-    - name: 📊 Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
-```
-
-### **Файл 2: `.github/workflows/cd.yml`** (Continuous Deployment)
-
-```yaml
-name: 🚀 Continuous Deployment
-
-on:
-  push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  workflow_run:
-    workflows: ["🔍 Continuous Integration"]
-    types: [completed]
-    branches: [ main ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
-jobs:
-  # =====================================
-  # 1. DEPLOY TO STAGING (на каждый push в main)
-  # =====================================
-  deploy-staging:
-    name: 🎭 Deploy to Staging
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event.workflow_run.conclusion == 'success'
-    environment: staging
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🚀 Deploy to staging environment
-      run: |
-        echo "🎭 Deploying to staging environment..."
-        # Здесь будет логика деплоя на staging
-        # Например, обновление Docker Compose файла
-
-    - name: 🧪 Run staging tests
-      run: |
-        echo "🧪 Running staging tests..."
-        # Интеграционные тесты на staging
-
-  # =====================================
-  # 2. DEPLOY TO PRODUCTION (только на теги)
-  # =====================================
-  deploy-production:
-    name: 🏭 Deploy to Production
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    environment: production
-    needs: deploy-staging
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🏭 Deploy to production
-      run: |
-        echo "🏭 Deploying to production environment..."
-        # Production deployment logic
-
-    - name: 📝 Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-  # =====================================
-  # 3. DEPLOY TO CODESPACES
-  # =====================================
-  deploy-codespaces:
-    name: 🌐 Update Codespaces Configuration
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🌐 Update Codespaces devcontainer
-      run: |
-        echo "🌐 Updating Codespaces configuration..."
-        # Update .devcontainer/devcontainer.json
-```
-
-### **Файл 3: `.github/workflows/security-scan.yml`**
-
-```yaml
-name: 🔒 Security Scanning
-
-on:
-  schedule:
-    - cron: '0 6 * * 1'  # Каждый понедельник в 6:00 UTC
-  workflow_dispatch:
-
-jobs:
-  dependency-scan:
-    name: 📦 Dependency Security Scan
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-
-    - name: 🔍 Run pip-audit
-      run: |
-        pip install pip-audit
-        pip-audit --requirement requirements.txt --format=json --output=audit-report.json
-
-    - name: 📊 Upload audit results
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-audit
-        path: audit-report.json
-```
-
----
-
-## 🐳 **DOCKER CONTAINER REGISTRY**
-
-### **Настройка GitHub Container Registry**
-
-1. **Включение Container Registry:**
-   - Идите в GitHub Settings → Developer settings → Personal access tokens
-   - Создайте token с правами `write:packages`
-
-2. **Локальная настройка:**
-
-```bash
-# Логин в GitHub Container Registry
-echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-
-# Тегирование образа
-docker tag rs-stoplist-project-app ghcr.io/USERNAME/rs-stoplist-project:latest
-
-# Публикация
-docker push ghcr.io/USERNAME/rs-stoplist-project:latest
-```
-
-### **Автоматическая публикация через Actions**
-
-В CI pipeline уже настроена автоматическая публикация в GHCR при каждом push.
-
----
-
-## 💻 **РАЗВЕРТЫВАНИЕ НА GITHUB CODESPACES**
-
-### **Файл: `.devcontainer/devcontainer.json`**
-
-```json
-{
-  "name": "Excel Processing System",
-  "dockerComposeFile": "../docker-compose.yml",
-  "service": "app",
-  "workspaceFolder": "/opt/app",
-
-  "features": {
-    "ghcr.io/devcontainers/features/common-utils:2": {},
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
-    "ghcr.io/devcontainers/features/github-cli:1": {}
-  },
-
-  "forwardPorts": [8000, 8080, 5432],
-  "portsAttributes": {
-    "8000": {
-      "label": "Application",
-      "onAutoForward": "notify"
-    },
-    "8080": {
-      "label": "Adminer (Database)",
-      "onAutoForward": "ignore"
-    },
-    "5432": {
-      "label": "PostgreSQL",
-      "onAutoForward": "ignore"
-    }
-  },
-
-  "postCreateCommand": "pip install -r requirements.txt",
-  "postStartCommand": "docker-compose up -d",
-
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker",
-        "ms-vscode.vscode-json",
-        "redhat.vscode-yaml"
-      ],
-      "settings": {
-        "python.defaultInterpreterPath": "/usr/local/bin/python",
-        "python.linting.enabled": true,
-        "python.linting.pylintEnabled": false,
-        "python.linting.banditEnabled": true,
-        "python.formatting.provider": "black"
-      }
-    }
-  }
-}
-```
-
-### **Использование Codespaces:**
-
-1. **Создание Codespace:**
-   ```bash
-   # Через GitHub CLI
-   gh codespace create --repo OWNER/rs-stoplist-project
-
-   # Или через веб-интерфейс GitHub
-   ```
-
-2. **Автоматический запуск:**
-   - Codespace автоматически запустит контейнеры
-   - Приложение будет доступно на порту 8000
-   - База данных на порту 5432
-
----
-
-## ☁️ **РАЗВЕРТЫВАНИЕ НА VPS/CLOUD**
-
-### **Вариант 1: Простое развертывание с Docker Compose**
-
-**На сервере (Ubuntu 20.04+):**
-
-```bash
-# 1. Установка Docker и Docker Compose
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-
-# 2. Клонирование репозитория
-git clone https://github.com/USERNAME/rs-stoplist-project.git
+git clone https://github.com/Alexbeo2024/rs-stoplist-project.git
 cd rs-stoplist-project
-
-# 3. Настройка окружения
-cp .env.example .env
-nano .env  # Настройте продакшн переменные
-
-# 4. Запуск
-docker-compose -f docker-compose.prod.yml up -d
-
-# 5. Проверка
-curl http://localhost:8000/health/detailed
 ```
 
-### **Файл: `docker-compose.prod.yml`**
-
-```yaml
-version: '3.8'
-
-services:
-  app:
-    image: ghcr.io/USERNAME/rs-stoplist-project:latest
-    container_name: excel_processor_app
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=production
-      - DEBUG=false
-    env_file:
-      - .env
-    depends_on:
-      - db
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  db:
-    image: postgres:15-alpine
-    container_name: excel_processor_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docs/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  nginx:
-    image: nginx:alpine
-    container_name: excel_processor_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/ssl/certs
-    depends_on:
-      - app
-    networks:
-      - app-network
-
-volumes:
-  postgres_data:
-
-networks:
-  app-network:
-    driver: bridge
-```
-
-### **Вариант 2: Kubernetes Deployment**
-
-**Файл: `k8s/deployment.yaml`**
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: excel-processor
-  labels:
-    app: excel-processor
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: excel-processor
-  template:
-    metadata:
-      labels:
-        app: excel-processor
-    spec:
-      containers:
-      - name: app
-        image: ghcr.io/USERNAME/rs-stoplist-project:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: ENVIRONMENT
-          value: "production"
-        livenessProbe:
-          httpGet:
-            path: /health/live
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /health/ready
-            port: 8000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: excel-processor-service
-spec:
-  selector:
-    app: excel-processor
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
-  type: LoadBalancer
-```
-
----
-
-## 📊 **МОНИТОРИНГ И ЛОГИРОВАНИЕ**
-
-### **Prometheus + Grafana Setup**
-
-**Файл: `monitoring/docker-compose.monitoring.yml`**
-
-```yaml
-version: '3.8'
-
-services:
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=grafana
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-
-volumes:
-  prometheus_data:
-  grafana_data:
-```
-
-### **ELK Stack для логов**
-
-**Файл: `logging/docker-compose.logging.yml`**
-
-```yaml
-version: '3.8'
-
-services:
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
-    container_name: kibana
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.11.0
-    container_name: logstash
-    volumes:
-      - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-    ports:
-      - "5000:5000"
-
-volumes:
-  elasticsearch_data:
-```
-
----
-
-## 🔐 **SECURITY & SECRETS MANAGEMENT**
-
-### **GitHub Secrets Configuration**
-
-В GitHub Repository Settings → Secrets and variables → Actions:
-
+### **2️⃣ Копирование конфигурации:**
 ```bash
-# Database secrets
-POSTGRES_USER=emailprocessor
-POSTGRES_PASSWORD=secure_production_password_123
-POSTGRES_DB=email_processor_db
+# Копируем пример переменных окружения
+cp env.example .env
+```
 
-# Email configuration
-EMAIL_USER=your-email@domain.com
-EMAIL_PASS=your-email-password
+### **3️⃣ Настройка основных переменных:**
+Откройте `.env` и укажите:
+```bash
+# ===== ОБЯЗАТЕЛЬНЫЕ НАСТРОЙКИ =====
 
-# SFTP configuration
+# Email для чтения файлов (Jugoexsim)
+EMAIL_USER=aak@jugoexsim.rs
+EMAIL_PASS=your_app_password_here
+
+# SFTP для загрузки файлов
 SFTP_HOST=your-sftp-server.com
 SFTP_USER=your-sftp-user
 SFTP_PASS=your-sftp-password
 
-# Notifications
-TG_BOT_TOKEN=your-telegram-bot-token
-TG_CHAT_ID=your-telegram-chat-id
-
-# Infrastructure
-SECRET_KEY=your-super-secret-key-for-production
-DOCKER_REGISTRY_TOKEN=your-docker-registry-token
+# База данных (можно оставить как есть для тестирования)
+POSTGRES_HOST=db
+POSTGRES_USER=emailprocessor
+POSTGRES_PASSWORD=secure_password_123
+POSTGRES_DB=email_processor_db
 ```
 
-### **Файл: `.github/workflows/secrets-sync.yml`**
-
-```yaml
-name: 🔐 Secrets Validation
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 1 * *'  # Первого числа каждого месяца
-
-jobs:
-  validate-secrets:
-    name: 🔍 Validate Required Secrets
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: 🔐 Check required secrets
-      run: |
-        secrets=(
-          "POSTGRES_USER"
-          "POSTGRES_PASSWORD"
-          "EMAIL_USER"
-          "EMAIL_PASS"
-          "SECRET_KEY"
-        )
-
-        missing_secrets=()
-
-        for secret in "${secrets[@]}"; do
-          if [[ -z "${!secret}" ]]; then
-            missing_secrets+=("$secret")
-          fi
-        done
-
-        if [[ ${#missing_secrets[@]} -gt 0 ]]; then
-          echo "❌ Missing required secrets: ${missing_secrets[*]}"
-          exit 1
-        else
-          echo "✅ All required secrets are configured"
-        fi
-      env:
-        POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-        EMAIL_USER: ${{ secrets.EMAIL_USER }}
-        EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        SECRET_KEY: ${{ secrets.SECRET_KEY }}
-```
-
----
-
-## 🚀 **ПОШАГОВАЯ ИНСТРУКЦИЯ ДЕПЛОЯ**
-
-### **Этап 1: Подготовка**
-
+### **4️⃣ Запуск:**
 ```bash
-# 1. Убедитесь что проект работает локально
 docker-compose up -d
-python3 quick_test.py
-docker-compose down
-
-# 2. Создайте GitHub репозиторий
-gh repo create rs-stoplist-project --public
-
-# 3. Настройте git
-git init
-git add .
-git commit -m "feat: initial production-ready system"
-git branch -M main
-git remote add origin https://github.com/USERNAME/rs-stoplist-project.git
-git push -u origin main
 ```
 
-### **Этап 2: Настройка CI/CD**
-
+### **5️⃣ Проверка:**
 ```bash
-# 1. Создайте директории для GitHub Actions
-mkdir -p .github/workflows
-mkdir -p .github/ISSUE_TEMPLATE
-mkdir -p .devcontainer
+# Статус контейнеров
+docker-compose ps
 
-# 2. Скопируйте все YAML файлы из этой инструкции
+# Логи приложения
+docker-compose logs app
 
-# 3. Настройте секреты в GitHub Repository Settings
-
-# 4. Закоммитьте изменения
-git add .github/
-git commit -m "feat: add comprehensive CI/CD pipeline"
-git push
+# Health check
+curl http://localhost:8000/health/detailed
 ```
 
-### **Этап 3: Развертывание**
+---
+
+## 🔧 **ДЕТАЛЬНАЯ НАСТРОЙКА**
+
+### **📧 Настройка Email (Jugoexsim)**
+
+Ваша корпоративная почта уже протестирована! Используйте:
 
 ```bash
-# Автоматический деплой через GitHub Actions
-git tag v1.0.0
-git push origin v1.0.0
+# В .env файле
+EMAIL_USER=aak@jugoexsim.rs
+EMAIL_PASS=your_actual_password
 
-# Или ручной деплой на сервер
-ssh user@your-server.com
-git clone https://github.com/USERNAME/rs-stoplist-project.git
+# Дополнительные настройки в config/config.test.yaml
+email:
+  server: "imap.gmail.com"        # Или mail.jugoexsim.rs
+  port: 993
+  username: "${EMAIL_USER}"
+  password: "${EMAIL_PASS}"
+  allowed_senders:
+    - "reports@jugoexsim.rs"      # Добавьте нужных отправителей
+    - "data@jugoexsim.rs"
+```
+
+### **📤 Настройка SFTP**
+
+```bash
+# В .env файле (выберите один из вариантов)
+
+# Вариант 1: Аутентификация по паролю
+SFTP_HOST=sftp.company.com
+SFTP_USER=excel_processor
+SFTP_PASS=your_password
+
+# Вариант 2: Аутентификация по SSH ключу
+SFTP_HOST=sftp.company.com
+SFTP_USER=excel_processor
+SFTP_KEY_PATH=/path/to/private_key
+```
+
+**Тестирование SFTP:**
+```bash
+python3 test_sftp_connection.py
+```
+
+### **📱 Настройка Telegram (ОПЦИОНАЛЬНО)**
+
+**Включить Telegram:**
+1. Создайте бота: [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Получите токен бота
+3. Добавьте бота в группу/канал
+4. Получите chat_id: [@userinfobot](https://t.me/userinfobot)
+
+```bash
+# В .env файле
+TG_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyZ
+TG_CHAT_ID=-1001234567890
+
+# В config/config.test.yaml
+notifications:
+  telegram:
+    bot_token: "${TG_BOT_TOKEN}"
+    chat_id: "${TG_CHAT_ID}"
+    enabled: true                 # ← Включить
+```
+
+**Отключить Telegram:**
+```yaml
+# В config/config.test.yaml
+notifications:
+  telegram:
+    enabled: false                # ← Отключить
+```
+
+### **📊 Настройка уведомлений**
+
+```bash
+# Email уведомления (всегда включены)
+SMTP_SERVER=smtp.jugoexsim.rs
+SMTP_PORT=465
+SMTP_USER=notifications@jugoexsim.rs
+SMTP_PASS=smtp_password
+
+# В config/config.test.yaml
+notifications:
+  email:
+    smtp_server: "${SMTP_SERVER}"
+    recipients:
+      - "admin@jugoexsim.rs"      # Кто получает уведомления
+      - "ops@jugoexsim.rs"
+```
+
+---
+
+## 🐳 **ВАРИАНТЫ РАЗВЕРТЫВАНИЯ**
+
+### **🟢 Вариант 1: Локальное развертывание (Рекомендуется)**
+
+```bash
+# Клонирование
+git clone https://github.com/Alexbeo2024/rs-stoplist-project.git
 cd rs-stoplist-project
-cp .env.example .env
-# Настройте .env файл
-docker-compose -f docker-compose.prod.yml up -d
+
+# Настройка
+cp env.example .env
+nano .env  # Отредактируйте переменные
+
+# Запуск
+docker-compose up -d
+
+# Проверка
+curl http://localhost:8000/health/detailed
+```
+
+### **🟡 Вариант 2: GitHub Codespaces**
+
+1. Перейдите на: https://github.com/Alexbeo2024/rs-stoplist-project
+2. Нажмите: **Code** → **Codespaces** → **Create codespace**
+3. Дождитесь инициализации (2-3 минуты)
+4. В терминале:
+   ```bash
+   cp env.example .env
+   nano .env  # Настройте переменные
+   docker-compose up -d
+   ```
+
+### **🔵 Вариант 3: Сервер/VPS**
+
+```bash
+# Подключение к серверу
+ssh user@your-server.com
+
+# Установка Docker (если нужно)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Клонирование и запуск
+git clone https://github.com/Alexbeo2024/rs-stoplist-project.git
+cd rs-stoplist-project
+cp env.example .env
+nano .env  # Настройка
+docker-compose up -d
 ```
 
 ---
 
-## 🔍 **TROUBLESHOOTING**
+## 🔍 **ТЕСТИРОВАНИЕ КОМПОНЕНТОВ**
 
-### **Распространенные проблемы:**
+### **📧 Тест Email (Jugoexsim)**
+```bash
+python3 test_jugoexsim_email.py
+```
+**Ожидаемый результат:**
+```
+✅ SMTP SSL: УСПЕШНО
+✅ IMAP: УСПЕШНО
+✅ Send Email: УСПЕШНО
+```
 
-1. **CI/CD Pipeline fails:**
-   ```bash
-   # Проверьте логи в GitHub Actions
-   # Убедитесь что все секреты настроены
-   # Проверьте права доступа к Container Registry
-   ```
+### **📁 Тест SFTP**
+```bash
+python3 test_sftp_connection.py
+```
+**Интерактивный ввод:**
+- Хост SFTP сервера
+- Имя пользователя
+- Пароль или SSH ключ
+- Удаленная папка
 
-2. **Docker build fails:**
-   ```bash
-   # Локальная отладка
-   docker build -t test-image .
-   docker run -it test-image bash
-   ```
+### **🧪 Тест приложения**
+```bash
+python3 quick_test_jugoexsim.py
+```
+**Проверяет:**
+- Docker контейнеры
+- Health endpoints
+- Database connectivity
+- Email конфигурацию
 
-3. **Deployment issues:**
-   ```bash
-   # Проверьте логи контейнера
-   docker-compose logs app
-
-   # Проверьте здоровье сервисов
-   curl http://localhost:8000/health/detailed
-   ```
-
-4. **Performance issues:**
-   ```bash
-   # Мониторинг ресурсов
-   docker stats
-
-   # Проверьте метрики
-   curl http://localhost:8000/metrics
-   ```
+### **🌐 Web интерфейс**
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health/detailed
+- **Metrics**: http://localhost:8000/metrics
 
 ---
 
-## 📝 **ЗАКЛЮЧЕНИЕ**
+## 📊 **МОНИТОРИНГ И ЛОГИ**
 
-Эта инструкция покрывает:
+### **📈 Мониторинг**
+```bash
+# Статус контейнеров
+docker-compose ps
 
-✅ **Полный CI/CD pipeline** с GitHub Actions
-✅ **Автоматизированное тестирование** и проверки качества кода
-✅ **Security scanning** и мониторинг уязвимостей
-✅ **Multi-platform Docker builds** для ARM64 и AMD64
-✅ **Production-ready deployment** на различных платформах
-✅ **Comprehensive monitoring** с Prometheus и Grafana
-✅ **Centralized logging** с ELK stack
-✅ **Secrets management** и security best practices
+# Использование ресурсов
+docker stats
 
-Ваше приложение готово к enterprise-level развертыванию с автоматизацией и мониторингом уровня Fortune 500 компаний! 🚀
+# Health check API
+curl http://localhost:8000/health/detailed | jq
+```
+
+### **📝 Логи**
+```bash
+# Логи приложения
+docker-compose logs app
+
+# Логи в реальном времени
+docker-compose logs -f app
+
+# Логи базы данных
+docker-compose logs db
+
+# Все логи
+docker-compose logs
+```
+
+### **📊 Метрики (Prometheus)**
+```bash
+# Prometheus метрики
+curl http://localhost:8000/metrics
+
+# Примеры метрик:
+# - emails_processed_total
+# - files_converted_total
+# - sftp_uploads_total
+# - processing_duration_seconds
+```
+
+---
+
+## ⚙️ **КОНФИГУРАЦИЯ**
+
+### **🔧 Основные настройки**
+
+**Файл:** `config/config.test.yaml`
+```yaml
+# Интервал проверки почты
+scheduler:
+  interval_hours: 1             # Каждый час
+
+# Максимальный размер файла
+file_processing:
+  max_file_size_mb: 50
+
+# Таймаут SFTP
+sftp:
+  timeout: 30
+  max_retries: 3
+```
+
+### **📁 Структура файлов**
+```
+rs-stoplist-project/
+├── 📁 config/                  # Конфигурация
+│   ├── config.test.yaml        # Основные настройки
+│   └── logging.yaml            # Настройки логирования
+├── 📁 src/                     # Исходный код
+│   ├── application/            # API и обработчики
+│   ├── domain/                 # Бизнес-логика
+│   └── infrastructure/         # Внешние сервисы
+├── 📁 docs/                    # Документация
+│   ├── ENVIRONMENT_VARIABLES.md
+│   ├── BUSINESS_PROCESS.md
+│   └── user_guide.md
+├── 📁 tests/                   # Тесты
+├── .env                        # Переменные окружения
+├── docker-compose.yml          # Docker конфигурация
+└── requirements.txt            # Python зависимости
+```
+
+---
+
+## 🚨 **TROUBLESHOOTING**
+
+### **❌ Проблема: Контейнеры не запускаются**
+```bash
+# Проверка статуса
+docker-compose ps
+
+# Проверка логов
+docker-compose logs
+
+# Пересборка образов
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+### **❌ Проблема: Email не читается**
+```bash
+# Тест подключения
+python3 test_jugoexsim_email.py
+
+# Проверьте:
+# 1. EMAIL_USER и EMAIL_PASS в .env
+# 2. App Password (не основной пароль)
+# 3. Доступность mail.jugoexsim.rs
+```
+
+### **❌ Проблема: SFTP не работает**
+```bash
+# Тест SFTP
+python3 test_sftp_connection.py
+
+# Проверьте:
+# 1. Доступность SFTP сервера
+# 2. Правильность учетных данных
+# 3. Права доступа к папкам
+```
+
+### **❌ Проблема: База данных недоступна**
+```bash
+# Перезапуск БД
+docker-compose restart db
+
+# Проверка подключения
+docker-compose exec db psql -U emailprocessor -d email_processor_db -c "\dt"
+```
+
+### **❌ Проблема: Telegram не работает**
+```bash
+# Проверьте в .env:
+echo $TG_BOT_TOKEN
+echo $TG_CHAT_ID
+
+# Проверьте в config/config.test.yaml:
+# enabled: true
+
+# Тест бота:
+curl -X GET "https://api.telegram.org/bot${TG_BOT_TOKEN}/getMe"
+```
+
+---
+
+## 🎯 **PRODUCTION DEPLOYMENT**
+
+### **🔒 Безопасность**
+1. **Смените пароли** во всех сервисах
+2. **Используйте SSH ключи** для SFTP
+3. **Настройте firewall** (только нужные порты)
+4. **Включите HTTPS** для API
+5. **Регулярно обновляйте** зависимости
+
+### **📈 Масштабирование**
+```yaml
+# docker-compose.prod.yml
+app:
+  deploy:
+    replicas: 3
+    resources:
+      limits:
+        cpus: '2'
+        memory: 1G
+```
+
+### **💾 Бэкапы**
+```bash
+# Бэкап БД
+docker-compose exec db pg_dump -U emailprocessor email_processor_db > backup.sql
+
+# Бэкап конфигурации
+tar -czf config_backup.tar.gz config/ .env
+```
+
+---
+
+## 📞 **ПОДДЕРЖКА**
+
+### **📋 Checklist запуска**
+- [ ] Репозиторий склонирован
+- [ ] .env файл настроен
+- [ ] Email протестирован
+- [ ] SFTP протестирован
+- [ ] Docker контейнеры запущены
+- [ ] Health checks проходят
+- [ ] Уведомления работают
+
+### **🔗 Полезные ссылки**
+- **GitHub**: https://github.com/Alexbeo2024/rs-stoplist-project
+- **API Docs**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health/detailed
+- **Metrics**: http://localhost:8000/metrics
+
+### **📧 Контакты**
+При возникновении проблем:
+1. Проверьте логи: `docker-compose logs app`
+2. Запустите тесты: `python3 quick_test_jugoexsim.py`
+3. Обратитесь к документации в папке `docs/`
+
+---
+
+## 🎉 **ГОТОВО К РАБОТЕ!**
+
+После успешного развертывания система будет:
+- ✅ **Каждый час** проверять почту aak@jugoexsim.rs
+- ✅ **Автоматически** конвертировать Excel → CSV
+- ✅ **Безопасно** загружать файлы на SFTP
+- ✅ **Отправлять** уведомления о статусе
+- ✅ **Логировать** все операции для аудита
+
+**Добро пожаловать в мир автоматизированной обработки данных!** 🚀
