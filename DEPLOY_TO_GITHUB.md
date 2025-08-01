@@ -59,9 +59,9 @@ TG_CHAT_ID=your-chat-id
 
 ## 📊 **Полезные ссылки после развертывания**
 
-- **🔄 CI/CD Status**: `https://github.com/USERNAME/REPO/actions`
-- **🐳 Docker Images**: `https://github.com/USERNAME/REPO/pkgs/container/REPO`
-- **🌐 Codespaces**: `https://github.com/USERNAME/REPO/codespaces`
+- **🔄 CI/CD Status**: `https://github.com/Alexbeo2024/rs-stoplist-project/actions`
+- **🐳 Docker Images**: `https://github.com/Alexbeo2024/rs-stoplist-project/pkgs/container/rs-stoplist-project`
+- **🌐 Codespaces**: `https://github.com/Alexbeo2024/rs-stoplist-project/codespaces`
 - **📖 API Docs**: `http://localhost:8000/docs` (в Codespace)
 - **💚 Health Check**: `http://localhost:8000/health/detailed`
 

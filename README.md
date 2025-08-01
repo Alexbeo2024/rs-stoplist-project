@@ -11,7 +11,7 @@
 
 ### **Вариант 1: GitHub Codespaces (рекомендуемый)**
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=username/rs-stoplist-project)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=Alexbeo2024/rs-stoplist-project)
 
 Codespace автоматически настроит все зависимости и запустит приложение.
 
