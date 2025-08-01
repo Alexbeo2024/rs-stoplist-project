@@ -29,6 +29,7 @@ notifications:
   telegram:
     bot_token: "${TG_BOT_TOKEN}"
     chat_id: "${TG_CHAT_ID}"
+    enabled: true # Можно отключить, установив false
 
 scheduler:
   interval_hours: 1

@@ -2,19 +2,19 @@
 # 1. Импорт библиотек
 # =====================================
 from dependency_injector import containers, providers
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from src.config import get_config # Импортируем функцию, а не объект
+from src.config import get_config
+from src.infrastructure.email.email_reader import EmailReaderService
+from src.infrastructure.storage.file_processor import FileProcessingService
+from src.infrastructure.sftp.sftp_uploader import SftpUploadService
+from src.infrastructure.storage.repositories import ProcessedFileRepository, OperationLogRepository
+from src.infrastructure.notifications.email_sender import EmailSender
+from src.infrastructure.notifications.telegram_sender import TelegramSender
 from src.domain.repositories import IProcessedFileRepository, IOperationLogRepository
 from src.domain.services import IEmailReaderService, IFileProcessingService, ISftpUploadService
 from src.domain.services.notifications import INotificationService
-from src.infrastructure.email.email_reader import EmailReaderService
-from src.infrastructure.notifications.email_sender import EmailSender
-from src.infrastructure.notifications.telegram_sender import TelegramSender
-from src.infrastructure.sftp.sftp_uploader import SftpUploadService
-from src.infrastructure.storage.repositories import ProcessedFileRepository, OperationLogRepository
-from src.infrastructure.storage.file_processor import FileProcessingService
 from src.application.handlers.main_handler import MainHandler
 from src.application.api.health_checks import HealthCheckService
 
@@ -60,54 +60,70 @@ class Container(containers.DeclarativeContainer):
         session=db_session_factory, # Исправлено с session_factory на session
     )
 
-    # --- Сервисы ---
-    telegram_sender: providers.Factory[INotificationService] = providers.Factory(
-        TelegramSender,
-        config=config.provided.notifications.telegram,
-    )
+    # --- Сервисы уведомлений (условная регистрация) ---
 
+    # Email sender (всегда доступен)
     email_sender: providers.Factory[INotificationService] = providers.Factory(
         EmailSender,
         config=config.provided.notifications.email,
     )
 
-    # Композитный сервис, который отправляет по всем каналам
-    notification_service: providers.List[INotificationService] = providers.List(
-        telegram_sender,
-        email_sender,
+    # Telegram sender (опциональный)
+    telegram_sender: providers.Factory[INotificationService] = providers.Factory(
+        TelegramSender,
+        config=config.provided.notifications.telegram,
     )
 
-    # --- Основные Сервисы ---
-    email_reader_service: providers.Factory[IEmailReaderService] = providers.Factory(
+    # Список сервисов уведомлений (динамически формируется)
+    notification_services = providers.List(
+        email_sender,
+        # telegram_sender добавляется условно в main_handler
+    )
+
+    # --- Основные сервисы ---
+    email_service: providers.Factory[IEmailReaderService] = providers.Factory(
         EmailReaderService,
         config=config.provided.email,
-        processed_file_repo=processed_file_repo,
     )
 
-    file_processing_service: providers.Factory[IFileProcessingService] = providers.Factory(
+    file_service: providers.Factory[IFileProcessingService] = providers.Factory(
         FileProcessingService,
-        base_storage_path="storage" # Можно вынести в конфиг позже
     )
 
-    sftp_upload_service: providers.Factory[ISftpUploadService] = providers.Factory(
+    sftp_service: providers.Factory[ISftpUploadService] = providers.Factory(
         SftpUploadService,
         config=config.provided.sftp,
     )
 
-    # --- Обработчики ---
-    main_handler: providers.Factory[MainHandler] = providers.Factory(
-        MainHandler,
-        email_service=email_reader_service,
-        file_service=file_processing_service,
-        sftp_service=sftp_upload_service,
-        file_repo=processed_file_repo,
-        log_repo=operation_log_repo,
-        notification_service=notification_service,
-    )
+    # --- Главный обработчик ---
+    async def main_handler(self) -> MainHandler:
+        """
+        Создает MainHandler с условным включением Telegram уведомлений.
+        """
+        config_instance = self.config()
 
-    # --- Health Checks ---
-    health_check_service: providers.Factory[HealthCheckService] = providers.Factory(
+        # Формируем список сервисов уведомлений
+        notification_services = [self.email_sender()]
+
+        # Добавляем Telegram только если он настроен и включен
+        if (config_instance.notifications.telegram and
+            config_instance.notifications.telegram.enabled and
+            config_instance.notifications.telegram.bot_token and
+            config_instance.notifications.telegram.chat_id):
+            notification_services.append(self.telegram_sender())
+
+        return MainHandler(
+            email_service=self.email_service(),
+            file_service=self.file_service(),
+            sftp_service=self.sftp_service(),
+            file_repo=self.processed_file_repo(),
+            log_repo=self.operation_log_repo(),
+            notification_service=notification_services,
+        )
+
+    # --- Health Check Service ---
+    health_service: providers.Factory[HealthCheckService] = providers.Factory(
         HealthCheckService,
-        config=config,
-        session_factory=db_session_factory,
+        db_engine=db_engine,
+        sftp_config=config.provided.sftp,
     )

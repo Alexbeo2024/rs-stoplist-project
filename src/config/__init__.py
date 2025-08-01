@@ -3,7 +3,7 @@
 # =====================================
 import os
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 import yaml
 from pydantic_settings import BaseSettings
@@ -38,11 +38,12 @@ class NotificationsConfig(BaseSettings):
         recipients: List[str]
 
     class Telegram(BaseSettings):
-        bot_token: str
-        chat_id: str
+        bot_token: Optional[str] = None
+        chat_id: Optional[str] = None
+        enabled: bool = False  # Добавляем флаг включения
 
     email: Email
-    telegram: Telegram
+    telegram: Optional[Telegram] = None  # Делаем Telegram опциональным
 
 class SchedulerConfig(BaseSettings):
     interval_hours: int
